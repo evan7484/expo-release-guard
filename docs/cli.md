@@ -10,9 +10,12 @@ expo-release-guard list
 등록된 검사를 실행합니다. 검사 id를 주면 그 검사만 실행합니다.
 
 ```bash
-npx expo-release-guard check            # 전부
-npx expo-release-guard check ios-plist  # 하나만
+npx expo-release-guard check                          # 기본 검사 전부
+npx expo-release-guard check ios-plist                # 하나만
+npx expo-release-guard check android-merged-manifest  # id 지정 시에만 도는 검사
 ```
+
+별도 빌드 단계가 필요한 검사(`android-merged-manifest` — Gradle 병합)는 기본 실행에 포함되지 않습니다. `list`에서 "(id 지정 시에만)"으로 표시됩니다.
 
 | 옵션 | 설명 |
 | --- | --- |

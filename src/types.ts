@@ -17,8 +17,8 @@ export type CheckResult =
 
 export type CheckStatus = CheckResult["status"];
 
-/** 성공 또는 사람이 읽을 오류 메시지. 예상 가능한 실패는 throw 대신 이것으로 돌려준다. */
-export type Result<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: string };
+/** 성공 또는 실패 값. 예상 가능한 실패는 throw 대신 이것으로 돌려준다. 기본 실패 값은 사람이 읽을 메시지다. */
+export type Result<T, E = string> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: E };
 
-export const ok = <T>(value: T): Result<T> => ({ ok: true, value });
-export const err = <T = never>(error: string): Result<T> => ({ ok: false, error });
+export const ok = <T, E = string>(value: T): Result<T, E> => ({ ok: true, value });
+export const err = <T = never, E = string>(error: E): Result<T, E> => ({ ok: false, error });

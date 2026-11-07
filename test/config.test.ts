@@ -52,3 +52,52 @@ describe("loadConfig", () => {
     expect(loaded.ok ? "" : loaded.error).toContain("release-guard.config.json");
   });
 });
+
+describe("parseConfig — android.permissions", () => {
+  it("규칙을 그대로 받아들인다", () => {
+    const parsed = parseConfig({
+      android: {
+        permissions: {
+          required: [{ name: "INTERNET", reason: "서버 통신" }],
+          forbidden: [{ name: "CAMERA", reason: "앨범만", blockedInSource: true }],
+        },
+      },
+    });
+    expect(parsed).toEqual({
+      ok: true,
+      value: {
+        android: {
+          permissions: {
+            required: [{ name: "INTERNET", reason: "서버 통신" }],
+            requiredMerged: [],
+            forbidden: [{ name: "CAMERA", reason: "앨범만", blockedInSource: true }],
+          },
+        },
+      },
+    });
+  });
+
+  it.each([
+    [{ android: [] }, "`android`는 객체여야 합니다."],
+    [{ android: { permissions: { required: "INTERNET" } } }, "`android.permissions.required`는 배열이어야 합니다."],
+    [{ android: { permissions: { required: [{ name: "INTERNET" }] } } }, "`android.permissions.required[0]`는 { name: string, reason: string } 이어야 합니다."],
+    [{ android: { permissions: { required: [{ name: "A", reason: "r", blockedInSource: true }] } } }, "`android.permissions.required[0]`.blockedInSource는 forbidden에서만 쓸 수 있습니다."],
+    [{ android: { permissions: { mergedPath: 3 } } }, "`android.permissions.mergedPath`는 문자열이어야 합니다."],
+  ])("잘못된 모양은 위치를 짚어 거부한다 %#", (raw, message) => {
+    expect(parseConfig(raw)).toEqual({ ok: false, error: message });
+  });
+
+  it("짧은 이름과 전체 이름을 같은 권한으로 보고 중복을 거부한다", () => {
+    const parsed = parseConfig({
+      android: { permissions: { forbidden: [{ name: "CAMERA", reason: "1" }, { name: "android.permission.CAMERA", reason: "2" }] } },
+    });
+    expect(parsed).toEqual({ ok: false, error: "`android.permissions.forbidden`에 android.permission.CAMERA가 중복됩니다." });
+  });
+
+  it("같은 권한을 required와 forbidden에 함께 두면 거부한다", () => {
+    const parsed = parseConfig({
+      android: { permissions: { required: [{ name: "CAMERA", reason: "1" }], forbidden: [{ name: "CAMERA", reason: "2" }] } },
+    });
+    expect(parsed).toEqual({ ok: false, error: "`android.permissions`: CAMERA가 required와 forbidden에 함께 있습니다." });
+  });
+});

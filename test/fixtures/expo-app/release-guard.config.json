@@ -2,9 +2,49 @@
   "ios": {
     "infoPlist": {
       "requiredKeys": [
-        { "key": "NSCalendarsUsageDescription", "reason": "캘린더 가져오기. 없으면 권한 요청 자체가 불가." },
-        { "key": "NSRemindersUsageDescription", "reason": "안 쓰지만 필수 — expo-calendar가 앱 시작 시 조회한다. 없으면 스플래시에서 종료." },
-        { "key": "NSPhotoLibraryAddUsageDescription", "reason": "사진 앨범 저장." }
+        {
+          "key": "NSCalendarsUsageDescription",
+          "reason": "캘린더 가져오기. 없으면 권한 요청 자체가 불가."
+        },
+        {
+          "key": "NSRemindersUsageDescription",
+          "reason": "안 쓰지만 필수 — expo-calendar가 앱 시작 시 조회한다. 없으면 스플래시에서 종료."
+        },
+        {
+          "key": "NSPhotoLibraryAddUsageDescription",
+          "reason": "사진 앨범 저장."
+        }
+      ]
+    }
+  },
+  "android": {
+    "permissions": {
+      "required": [
+        {
+          "name": "INTERNET",
+          "reason": "서버 통신."
+        },
+        {
+          "name": "READ_CALENDAR",
+          "reason": "기기 캘린더 가져오기."
+        }
+      ],
+      "requiredMerged": [
+        {
+          "name": "POST_NOTIFICATIONS",
+          "reason": "expo-notifications가 자기 매니페스트로 넣는다. 없으면 Android 13+에서 푸시 권한을 요청조차 못 한다."
+        }
+      ],
+      "forbidden": [
+        {
+          "name": "CAMERA",
+          "reason": "사진은 앨범 선택만 쓴다. 남으면 스토어에 '카메라'로 노출된다.",
+          "blockedInSource": true
+        },
+        {
+          "name": "READ_CONTACTS",
+          "reason": "연락처를 읽는 기능이 없다."
+        }
       ]
     }
   }

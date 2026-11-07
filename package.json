@@ -1,7 +1,7 @@
 {
   "name": "expo-release-guard",
   "version": "0.1.0",
-  "description": "빌드 성공이 실행 가능을 뜻하지 않을 때 — Expo prebuild 산출물을 릴리스 전에 검사하는 CLI",
+  "description": "빌드 성공이 실행 가능을 뜻하지 않을 때 — Expo prebuild·Gradle 산출물을 릴리스 전에 검사하는 CLI",
   "keywords": [
     "expo",
     "react-native",

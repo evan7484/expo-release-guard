@@ -26,7 +26,7 @@ $ npx expo-release-guard check
 
 **원칙**
 
-1. **입력이 아니라 산출물을 본다.** `app.json`이 아니라 `expo prebuild`가 만든 `ios/`, `android/`를 검사합니다.
+1. **입력이 아니라 산출물을 본다.** `app.json`이 아니라 `expo prebuild`가 만든 `ios/`, `android/`와 Gradle 병합 결과를 검사합니다.
 2. **이유를 같이 적는다.** 필수 항목마다 `reason`을 받아, 실패 메시지에 "왜 지우면 안 되는지"를 보여 줍니다. 다음 사람이 같은 키를 다시 지우지 않게 하기 위해서입니다.
 3. **추측하지 않는다.** 대상 파일 후보가 여럿이면 하나를 골라 통과시키지 않고 경로 설정을 요구합니다.
 
@@ -65,8 +65,10 @@ Node.js 22.12 이상이 필요합니다.
 3. CI에 붙입니다 (GitHub Actions 예시).
 
    ```yaml
-   - run: npx expo prebuild --platform ios --clean --no-install
-   - run: npx expo-release-guard check
+   - run: npx expo prebuild --clean --no-install
+   - run: npx expo-release-guard check            # ios-plist · android-manifest
+   - run: cd android && ./gradlew :app:processReleaseMainManifest
+   - run: npx expo-release-guard check android-merged-manifest
    ```
 
 ## 검사 목록
@@ -74,8 +76,10 @@ Node.js 22.12 이상이 필요합니다.
 | id | 하는 일 | 문서 |
 | --- | --- | --- |
 | `ios-plist` | prebuild 산출물 `Info.plist`에 필수 키가 비어 있지 않은 문자열로 남아 있는지 | [docs/checks/ios-plist.md](docs/checks/ios-plist.md) |
+| `android-manifest` | prebuild 산출물 매니페스트의 필수·금지 권한, `blockedPermissions` 제거 지시자 | [docs/checks/android-manifest.md](docs/checks/android-manifest.md) |
+| `android-merged-manifest` | Gradle 병합 매니페스트(최종본)의 필수·금지 권한 — id를 지정해 실행 | [docs/checks/android-manifest.md](docs/checks/android-manifest.md) |
 
-이식 예정: Android 매니페스트 병합 결과 검사, 대체 앱 아이콘 등록 검사, OTA 채널·런타임 버전 대조. 진행 상황은 이슈를 참고하세요.
+이식 예정: 대체 앱 아이콘 등록 검사, OTA 채널·런타임 버전 대조.
 
 ## 문서
 

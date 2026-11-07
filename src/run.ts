@@ -11,7 +11,7 @@ export interface CheckReport {
 export interface RunOptions {
   readonly cwd: string;
   readonly config: Config;
-  /** 돌릴 검사 id. 생략하면 전부 */
+  /** 돌릴 검사 id. 생략하면 기본 검사 전부(`runsByDefault`가 false인 검사는 id로만 실행) */
   readonly only?: readonly string[];
 }
 
@@ -35,7 +35,7 @@ export async function runChecks({ cwd, config, only }: RunOptions): Promise<Resu
 }
 
 function selectChecks(only: readonly string[] | undefined): Result<readonly Check[]> {
-  if (!only || only.length === 0) return ok(registry);
+  if (!only || only.length === 0) return ok(registry.filter((c) => c.runsByDefault !== false));
   const unknown = only.filter((id) => !registry.some((c) => c.id === id));
   if (unknown.length > 0) {
     return err(`알 수 없는 검사: ${unknown.join(", ")} (가능: ${registry.map((c) => c.id).join(", ")})`);

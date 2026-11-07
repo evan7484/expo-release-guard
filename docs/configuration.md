@@ -34,8 +34,19 @@ interface Config {
       requiredKeys: { key: string; reason: string }[];
     };
   };
+  android?: {
+    permissions?: {
+      required?: { name: string; reason: string }[];
+      requiredMerged?: { name: string; reason: string }[];
+      forbidden?: { name: string; reason: string; blockedInSource?: boolean }[];
+      sourcePath?: string;
+      mergedPath?: string;
+    };
+  };
 }
 ```
+
+Android 규칙의 의미는 [android-manifest 문서](checks/android-manifest.md)에 있습니다.
 
 설정은 읽을 때 한 번 검증합니다. 모양이 틀리면 검사를 돌리지 않고 어느 위치가 틀렸는지 알려 준 뒤 종료 코드 `2`로 끝납니다.
 
@@ -45,5 +56,8 @@ interface Config {
 | 각 항목은 `key`와 `reason`이 모두 문자열 | ``ios.infoPlist.requiredKeys[0]`는 { key: string, reason: string } 이어야 합니다.`` |
 | `key`는 비어 있지 않음 | ``ios.infoPlist.requiredKeys[0].key`가 비었습니다.`` |
 | `key`는 중복 불가 | ``ios.infoPlist.requiredKeys`에 A가 중복됩니다.`` |
+| 권한 이름은 목록 안에서 중복 불가 (짧은 이름·전체 이름 동일 취급) | ``android.permissions.forbidden`에 android.permission.CAMERA가 중복됩니다.`` |
+| 같은 권한을 required와 forbidden에 함께 둘 수 없음 | ``android.permissions`: CAMERA가 required와 forbidden에 함께 있습니다.`` |
+| `blockedInSource`는 forbidden에서만 | ``android.permissions.required[0]`.blockedInSource는 forbidden에서만 쓸 수 있습니다.`` |
 
 `reason`을 필수로 둔 이유: 필요 없어 보이는 키일수록 지워지기 쉽습니다. 실패 메시지에 이유가 함께 나와야 다음 사람이 같은 실수를 반복하지 않습니다.

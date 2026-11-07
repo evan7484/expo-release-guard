@@ -1,5 +1,12 @@
-export { defineConfig, loadConfig, parseConfig } from "./config.js";
-export type { Config, IosInfoPlistConfig, RequiredKey } from "./config.js";
+export { defineConfig, loadConfig, normalizePermission, parseConfig } from "./config.js";
+export type {
+  AndroidPermissionsConfig,
+  Config,
+  ForbiddenPermissionRule,
+  IosInfoPlistConfig,
+  PermissionRule,
+  RequiredKey,
+} from "./config.js";
 export { runChecks, hasFailure } from "./run.js";
 export type { CheckReport, RunOptions } from "./run.js";
 export { formatJson, formatText } from "./report.js";

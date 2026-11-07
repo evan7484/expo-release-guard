@@ -28,6 +28,7 @@ src/
     index.ts        검사 등록부
     types.ts        Check 인터페이스
     ios-plist.ts    검사 하나 = 파일 하나
+    android-manifest.ts  같은 규칙을 소스·병합 두 단계에 적용하는 검사 둘
 test/
   fixtures/         CLI 스모크 테스트용 샘플 Expo 프로젝트
   helpers.ts        임시 프로젝트를 만드는 도우미
@@ -37,6 +38,7 @@ docs/               사용자 문서 (README에서 링크)
 ## 검사 추가하기
 
 1. `src/checks/<id>.ts`에 `Check`를 구현합니다. 설정이 없으면 `fail`이 아니라 `skip`을 돌려주세요.
+   별도 빌드 단계가 있어야 하는 검사는 `runsByDefault: false`로 두어 id를 지정했을 때만 돌게 합니다.
 2. 순수 로직은 `run<Id>(cwd, options)`처럼 따로 export해 테스트하기 쉽게 합니다.
 3. `src/checks/index.ts`의 `checks` 배열에 추가합니다.
 4. 설정이 필요하면 `src/config.ts`의 `Config` 타입과 `parseConfig`에 검증을 추가합니다.

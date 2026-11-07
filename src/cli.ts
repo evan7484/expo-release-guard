@@ -59,7 +59,7 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
 
   switch (command) {
     case "list":
-      io.stdout(checks.map((c) => `${c.id}\t${c.title}`).join("\n"));
+      io.stdout(checks.map((c) => `${c.id}\t${c.title}${c.runsByDefault === false ? " (id 지정 시에만)" : ""}`).join("\n"));
       return EXIT.ok;
     case "check": {
       const cwd = path.resolve(io.cwd, values.cwd ?? ".");
