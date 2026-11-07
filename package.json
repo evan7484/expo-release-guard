@@ -1,0 +1,63 @@
+{
+  "name": "expo-release-guard",
+  "version": "0.1.0",
+  "description": "빌드 성공이 실행 가능을 뜻하지 않을 때 — Expo prebuild 산출물을 릴리스 전에 검사하는 CLI",
+  "keywords": [
+    "expo",
+    "react-native",
+    "prebuild",
+    "release",
+    "ci",
+    "info.plist",
+    "cli"
+  ],
+  "license": "MIT",
+  "author": "Choi Junseo (https://github.com/evan7484)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/evan7484/expo-release-guard.git"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "bin": {
+    "expo-release-guard": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check:package": "publint --strict && attw --pack . --profile esm-only",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm test && npm run build && npm run check:package"
+  },
+  "dependencies": {
+    "@expo/plist": "^0.10.1"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.5",
+    "eslint": "^10.14.0",
+    "publint": "^0.3.25",
+    "tsup": "^9.0.0",
+    "typescript": "~6.0",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.0.5"
+  }
+}

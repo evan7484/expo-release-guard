@@ -1,0 +1,11 @@
+{
+  "ios": {
+    "infoPlist": {
+      "requiredKeys": [
+        { "key": "NSCalendarsUsageDescription", "reason": "캘린더 가져오기. 없으면 권한 요청 자체가 불가." },
+        { "key": "NSRemindersUsageDescription", "reason": "안 쓰지만 필수 — expo-calendar가 앱 시작 시 조회한다. 없으면 스플래시에서 종료." },
+        { "key": "NSPhotoLibraryAddUsageDescription", "reason": "사진 앨범 저장." }
+      ]
+    }
+  }
+}

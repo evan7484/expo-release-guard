@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDisplayName</key>
+  <string>ExampleApp</string>
+  <key>NSCalendarsUsageDescription</key>
+  <string>기기 캘린더의 일정을 할 일로 가져옵니다.</string>
+  <key>NSRemindersUsageDescription</key>
+  <string>미리알림에는 접근하지 않습니다.</string>
+  <key>NSPhotoLibraryAddUsageDescription</key>
+  <string>사진을 앨범에 저장합니다.</string>
+</dict>
+</plist>
