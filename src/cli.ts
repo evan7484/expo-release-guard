@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { checks } from "./checks/index.js";
-import { loadConfig } from "./config.js";
+import { CONFIG_FILENAMES, loadConfig } from "./config.js";
+import { buildInitialConfig } from "./init.js";
 import { formatJson, formatText } from "./report.js";
 import { hasFailure, runChecks } from "./run.js";
 
@@ -19,8 +20,14 @@ export interface Io {
 const HELP = `expo-release-guard — Expo prebuild 산출물을 릴리스 전에 검사합니다
 
 사용법
+  expo-release-guard init [--force] [--stdout]
   expo-release-guard check [검사 id...] [옵션]
   expo-release-guard list
+
+init
+  지금 prebuild 산출물을 읽어 release-guard.config.json 초안을 만듭니다.
+      --force          이미 있는 설정 파일을 덮어씀
+      --stdout         파일 대신 표준 출력으로
 
 옵션
   -c, --config <path>  설정 파일 경로 (기본: release-guard.config.{json,js,mjs})
@@ -42,6 +49,8 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
         config: { type: "string", short: "c" },
         cwd: { type: "string" },
         json: { type: "boolean", default: false },
+        force: { type: "boolean", default: false },
+        stdout: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
       },
     });
@@ -58,6 +67,28 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
   }
 
   switch (command) {
+    case "init": {
+      const cwd = path.resolve(io.cwd, values.cwd ?? ".");
+      const draft = buildInitialConfig(cwd);
+      if (!draft.ok) {
+        io.stderr(draft.error);
+        return EXIT.usage;
+      }
+      const json = `${JSON.stringify(draft.value.config, null, 2)}\n`;
+      if (values.stdout) {
+        io.stdout(json.trimEnd());
+        return EXIT.ok;
+      }
+      const existing = CONFIG_FILENAMES.map((f) => path.join(cwd, f)).find((f) => existsSync(f));
+      if (existing !== undefined && !values.force) {
+        io.stderr(`${path.relative(cwd, existing)}가 이미 있습니다. 덮어쓰려면 --force, 비교만 하려면 --stdout을 쓰세요.`);
+        return EXIT.usage;
+      }
+      const target = path.join(cwd, CONFIG_FILENAMES[0]);
+      writeFileSync(target, json);
+      io.stdout([`✔ ${path.relative(cwd, target)}를 만들었습니다.`, ...draft.value.notes.map((n) => `  - ${n}`)].join("\n"));
+      return EXIT.ok;
+    }
     case "list":
       io.stdout(checks.map((c) => `${c.id}\t${c.title}${c.runsByDefault === false ? " (id 지정 시에만)" : ""}`).join("\n"));
       return EXIT.ok;

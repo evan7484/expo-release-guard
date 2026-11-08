@@ -33,6 +33,11 @@ interface Config {
       path?: string;
       requiredKeys: { key: string; reason: string }[];
     };
+    alternateIcons?: {
+      names: string[];
+      projectPath?: string;
+      assetCatalogPath?: string;
+    };
   };
   android?: {
     permissions?: {
@@ -42,11 +47,19 @@ interface Config {
       sourcePath?: string;
       mergedPath?: string;
     };
+    launcherAliases?: {
+      aliases: string[];
+      enabledByDefault: string;
+      mainActivity?: string;
+      manifestPath?: string;
+    };
   };
 }
 ```
 
-Android 규칙의 의미는 [android-manifest 문서](checks/android-manifest.md)에 있습니다.
+Android 권한 규칙의 의미는 [android-manifest 문서](checks/android-manifest.md), 아이콘 설정은 [app-icons 문서](checks/app-icons.md)에 있습니다.
+
+처음이라면 직접 쓰기보다 `npx expo-release-guard init`으로 지금 산출물에서 초안을 만드는 편이 빠릅니다([CLI 문서](cli.md#init)).
 
 설정은 읽을 때 한 번 검증합니다. 모양이 틀리면 검사를 돌리지 않고 어느 위치가 틀렸는지 알려 준 뒤 종료 코드 `2`로 끝납니다.
 

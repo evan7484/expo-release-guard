@@ -46,12 +46,43 @@ export interface AndroidPermissionsConfig {
   readonly mergedPath?: string;
 }
 
+/**
+ * iOS 대체 앱 아이콘. config plugin이 등록하는 두 곳 — 빌드 설정
+ * `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`와 에셋 카탈로그의 `<이름>.appiconset` — 이
+ * 둘 다 맞아야 `setAlternateIconName`이 동작한다. 하나만 빠지면 빌드는 통과하고 아이콘 변경만 실패한다.
+ */
+export interface IosAlternateIconsConfig {
+  readonly names: readonly string[];
+  /** cwd 기준 project.pbxproj 경로. 생략하면 `ios/*.xcodeproj/project.pbxproj`를 찾는다. */
+  readonly projectPath?: string;
+  /** cwd 기준 에셋 카탈로그(.xcassets) 경로. 생략하면 Info.plist 옆의 `Images.xcassets`. */
+  readonly assetCatalogPath?: string;
+}
+
+/**
+ * Android 런처 별칭(activity-alias)으로 아이콘을 바꾸는 구성. 별칭마다 LAUNCHER intent-filter가
+ * 있어야 하고, 켜진 별칭은 정확히 하나여야 한다(0개면 런처에서 앱이 사라지고, 2개 이상이면 아이콘이 여럿).
+ * 메인 액티비티에 LAUNCHER가 남아 있으면 아이콘이 하나 더 생긴다.
+ */
+export interface AndroidLauncherAliasesConfig {
+  /** 별칭의 `android:name` 끝부분 (예: `MainActivityDefault`) */
+  readonly aliases: readonly string[];
+  /** 기본으로 켜져 있어야 하는 별칭 — `aliases` 중 하나 */
+  readonly enabledByDefault: string;
+  /** 메인 액티비티 `android:name` 끝부분. 기본 `.MainActivity` */
+  readonly mainActivity?: string;
+  /** cwd 기준 매니페스트 경로. 기본 `android/app/src/main/AndroidManifest.xml` */
+  readonly manifestPath?: string;
+}
+
 export interface Config {
   readonly ios?: {
     readonly infoPlist?: IosInfoPlistConfig;
+    readonly alternateIcons?: IosAlternateIconsConfig;
   };
   readonly android?: {
     readonly permissions?: AndroidPermissionsConfig;
+    readonly launcherAliases?: AndroidLauncherAliasesConfig;
   };
 }
 
@@ -115,8 +146,11 @@ function parseIos(ios: unknown): Result<Config["ios"]> {
   if (ios === undefined) return ok(undefined);
   if (!isRecord(ios)) return err("`ios`는 객체여야 합니다.");
 
+  const icons = parseAlternateIcons(ios["alternateIcons"]);
+  if (!icons.ok) return icons;
+  const withIcons = icons.value === undefined ? {} : { alternateIcons: icons.value };
   const { infoPlist } = ios;
-  if (infoPlist === undefined) return ok({});
+  if (infoPlist === undefined) return ok(withIcons);
   if (!isRecord(infoPlist)) return err("`ios.infoPlist`는 객체여야 합니다.");
 
   const { path: plistPath, requiredKeys } = infoPlist;
@@ -135,15 +169,21 @@ function parseIos(ios: unknown): Result<Config["ios"]> {
   const dup = firstDuplicate(keys.map((k) => k.key));
   if (dup !== undefined) return err(`\`ios.infoPlist.requiredKeys\`에 ${dup}가 중복됩니다.`);
 
-  return ok({ infoPlist: plistPath === undefined ? { requiredKeys: keys } : { path: plistPath, requiredKeys: keys } });
+  return ok({
+    ...withIcons,
+    infoPlist: plistPath === undefined ? { requiredKeys: keys } : { path: plistPath, requiredKeys: keys },
+  });
 }
 
 function parseAndroid(android: unknown): Result<Config["android"]> {
   if (android === undefined) return ok(undefined);
   if (!isRecord(android)) return err("`android`는 객체여야 합니다.");
 
+  const aliases = parseLauncherAliases(android["launcherAliases"]);
+  if (!aliases.ok) return aliases;
+  const withAliases = aliases.value === undefined ? {} : { launcherAliases: aliases.value };
   const { permissions } = android;
-  if (permissions === undefined) return ok({});
+  if (permissions === undefined) return ok(withAliases);
   if (!isRecord(permissions)) return err("`android.permissions`는 객체여야 합니다.");
 
   const where = "android.permissions";
@@ -167,6 +207,7 @@ function parseAndroid(android: unknown): Result<Config["android"]> {
   const sourcePath = permissions["sourcePath"];
   const mergedPath = permissions["mergedPath"];
   return ok({
+    ...withAliases,
     permissions: {
       required: required.value,
       requiredMerged: requiredMerged.value,
@@ -203,6 +244,65 @@ function parseRules(raw: unknown, where: string, allowBlocked: boolean): Result<
   const dup = firstDuplicate(rules.map((r) => normalizePermission(r.name)));
   if (dup !== undefined) return err(`\`${where}\`에 ${dup}가 중복됩니다.`);
   return ok(rules);
+}
+
+function parseNames(raw: unknown, where: string): Result<string[]> {
+  if (!Array.isArray(raw) || raw.length === 0) return err(`\`${where}\`는 비어 있지 않은 문자열 배열이어야 합니다.`);
+  const names: string[] = [];
+  for (const [i, item] of raw.entries()) {
+    if (typeof item !== "string" || item.trim() === "") {
+      return err(`\`${where}[${String(i)}]\`는 비어 있지 않은 문자열이어야 합니다.`);
+    }
+    names.push(item.trim());
+  }
+  const dup = firstDuplicate(names);
+  if (dup !== undefined) return err(`\`${where}\`에 ${dup}가 중복됩니다.`);
+  return ok(names);
+}
+
+function optionalString(record: Record<string, unknown>, key: string, where: string): Result<string | undefined> {
+  const v = record[key];
+  if (v === undefined) return ok(undefined);
+  return typeof v === "string" && v.trim() !== "" ? ok(v) : err(`\`${where}.${key}\`는 비어 있지 않은 문자열이어야 합니다.`);
+}
+
+function parseAlternateIcons(raw: unknown): Result<IosAlternateIconsConfig | undefined> {
+  if (raw === undefined) return ok(undefined);
+  const where = "ios.alternateIcons";
+  if (!isRecord(raw)) return err(`\`${where}\`는 객체여야 합니다.`);
+  const names = parseNames(raw["names"], `${where}.names`);
+  if (!names.ok) return names;
+  const projectPath = optionalString(raw, "projectPath", where);
+  if (!projectPath.ok) return projectPath;
+  const assetCatalogPath = optionalString(raw, "assetCatalogPath", where);
+  if (!assetCatalogPath.ok) return assetCatalogPath;
+  return ok({
+    names: names.value,
+    ...(projectPath.value === undefined ? {} : { projectPath: projectPath.value }),
+    ...(assetCatalogPath.value === undefined ? {} : { assetCatalogPath: assetCatalogPath.value }),
+  });
+}
+
+function parseLauncherAliases(raw: unknown): Result<AndroidLauncherAliasesConfig | undefined> {
+  if (raw === undefined) return ok(undefined);
+  const where = "android.launcherAliases";
+  if (!isRecord(raw)) return err(`\`${where}\`는 객체여야 합니다.`);
+  const aliases = parseNames(raw["aliases"], `${where}.aliases`);
+  if (!aliases.ok) return aliases;
+  const enabled = raw["enabledByDefault"];
+  if (typeof enabled !== "string" || !aliases.value.includes(enabled)) {
+    return err(`\`${where}.enabledByDefault\`는 aliases 중 하나여야 합니다.`);
+  }
+  const mainActivity = optionalString(raw, "mainActivity", where);
+  if (!mainActivity.ok) return mainActivity;
+  const manifestPath = optionalString(raw, "manifestPath", where);
+  if (!manifestPath.ok) return manifestPath;
+  return ok({
+    aliases: aliases.value,
+    enabledByDefault: enabled,
+    ...(mainActivity.value === undefined ? {} : { mainActivity: mainActivity.value }),
+    ...(manifestPath.value === undefined ? {} : { manifestPath: manifestPath.value }),
+  });
 }
 
 /** `CAMERA` → `android.permission.CAMERA`. 점이 있으면 이미 전체 이름으로 본다. */

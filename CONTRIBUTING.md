@@ -18,6 +18,7 @@ PR마다 CI가 Node 22·24에서 lint·typecheck·test를 돌리고, 배포될 t
 ```
 src/
   cli.ts            인자 해석·종료 코드. 입출력을 주입받아 프로세스 없이 테스트한다
+  init.ts           지금 산출물에서 설정 초안을 만든다 (init 명령)
   index.ts          공개 API — 여기서 export하지 않은 것은 내부 구현
   config.ts         설정 파일 탐색·읽기·검증 (외부 입력은 여기서만 unknown → Config로 좁힌다)
   run.ts            검사 선택·실행, 검사 하나의 예외가 나머지를 막지 않게
@@ -29,6 +30,7 @@ src/
     types.ts        Check 인터페이스
     ios-plist.ts    검사 하나 = 파일 하나
     android-manifest.ts  같은 규칙을 소스·병합 두 단계에 적용하는 검사 둘
+    app-icons.ts    iOS 대체 아이콘·Android 런처 별칭 등록 검사 둘
 test/
   fixtures/         CLI 스모크 테스트용 샘플 Expo 프로젝트
   helpers.ts        임시 프로젝트를 만드는 도우미
@@ -43,7 +45,8 @@ docs/               사용자 문서 (README에서 링크)
 3. `src/checks/index.ts`의 `checks` 배열에 추가합니다.
 4. 설정이 필요하면 `src/config.ts`의 `Config` 타입과 `parseConfig`에 검증을 추가합니다.
 5. `test/<id>.test.ts`에 통과·실패·건너뜀·잘못된 입력 경우를 씁니다.
-6. `docs/checks/<id>.md`를 쓰고 README 검사 목록에 한 줄 추가합니다.
+6. `docs/checks/<id>.md`를 쓰고 README(영어·한국어) 검사 목록에 한 줄 추가합니다.
+7. 산출물에서 기준선을 뽑을 수 있는 검사라면 `src/init.ts`에도 초안 생성을 더합니다.
 
 ## 원칙
 

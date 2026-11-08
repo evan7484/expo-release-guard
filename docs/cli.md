@@ -1,9 +1,37 @@
 # CLI 레퍼런스
 
 ```
+expo-release-guard init [--force] [--stdout]
 expo-release-guard check [검사 id...] [옵션]
 expo-release-guard list
 ```
+
+## `init`
+
+지금 prebuild 산출물을 읽어 `release-guard.config.json` 초안을 만듭니다. **지금 상태를 기준선으로 고정**하는 것이 목적입니다.
+
+```bash
+npx expo prebuild --clean --no-install
+(cd android && ./gradlew :app:processReleaseMainManifest)   # 선택 — 라이브러리 권한까지 담으려면
+npx expo-release-guard init
+```
+
+| 산출물 | 초안에 들어가는 것 |
+| --- | --- |
+| `Info.plist`의 `NS*UsageDescription` (값이 비지 않은 것) | `ios.infoPlist.requiredKeys` |
+| 빌드 설정 `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` | `ios.alternateIcons.names` |
+| 소스 매니페스트 권한 | `android.permissions.required` |
+| 소스 매니페스트의 `tools:node="remove"` 권한 | `android.permissions.forbidden` (`blockedInSource: true`) |
+| 병합 매니페스트에만 있는 권한 (Gradle 단계 뒤) | `android.permissions.requiredMerged` |
+| LAUNCHER `activity-alias` (켜진 것이 정확히 하나일 때) | `android.launcherAliases` |
+
+모든 `reason`은 `TODO: …`로 채워지니 직접 고치세요. 실패했을 때 다음 사람이 보는 설명입니다. 무엇을 **금지**할지(위치·연락처 등)는 산출물이 말해 주지 않으므로 `forbidden`에 직접 더해야 합니다.
+
+| 옵션 | 설명 |
+| --- | --- |
+| `--force` | 이미 있는 설정 파일을 덮어씁니다. 없으면 기존 파일을 지키고 종료 코드 `2`로 끝납니다. |
+| `--stdout` | 파일을 만들지 않고 JSON을 출력합니다. 기존 설정과 비교할 때 씁니다. |
+| `--cwd <path>` | 프로젝트 루트. |
 
 ## `check`
 
@@ -12,6 +40,7 @@ expo-release-guard list
 ```bash
 npx expo-release-guard check                          # 기본 검사 전부
 npx expo-release-guard check ios-plist                # 하나만
+npx expo-release-guard check ios-alternate-icons android-launcher-aliases
 npx expo-release-guard check android-merged-manifest  # id 지정 시에만 도는 검사
 ```
 

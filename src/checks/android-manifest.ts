@@ -100,7 +100,7 @@ export function readPermissions(xml: string): Map<string, string> {
   return found;
 }
 
-const isRemoved = (tag: string): boolean => /tools:node\s*=\s*"remove"/.test(tag);
+export const isRemoved = (tag: string): boolean => /tools:node\s*=\s*"remove"/.test(tag);
 
 function failWith(message: string, hint?: string): CheckResult {
   return { status: "fail", summary: message, problems: [hint === undefined ? { message } : { message, hint }] };
@@ -143,7 +143,7 @@ function locateManifest(
 }
 
 /** AGP 버전마다 경로가 달라 intermediates 아래 `merged_manifest(s)/release` 의 매니페스트를 찾는다. */
-function findMergedManifests(dir: string): string[] {
+export function findMergedManifests(dir: string): string[] {
   if (!existsSync(dir)) return [];
   const hits: string[] = [];
   const walk = (d: string): void => {
