@@ -50,3 +50,19 @@ jobs:
           npm i "$GITHUB_WORKSPACE"/expo-release-guard-*.tgz
           npx expo-release-guard check --cwd "$GITHUB_WORKSPACE/test/fixtures/expo-app"
           npx expo-release-guard list
+
+  action:
+    name: GitHub Action (composite) smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # 배포된 버전으로 composite action 자체(입력 전달·인자 조립)를 검증한다.
+      # 0.1.0에 있는 검사만 지정해, 새 버전 배포 전에도 이 잡이 돈다.
+      - uses: ./
+        with:
+          working-directory: test/fixtures/expo-app
+          checks: ios-plist android-manifest
+          version: 0.1.0

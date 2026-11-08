@@ -42,7 +42,10 @@ describe("cli", () => {
       ok: true,
       checks: [
         { id: "ios-plist", result: { status: "pass" } },
+        // 설정이 없는 검사는 실패가 아니라 건너뜀
+        { id: "ios-alternate-icons", result: { status: "skip" } },
         { id: "android-manifest", result: { status: "pass" } },
+        { id: "android-launcher-aliases", result: { status: "skip" } },
       ],
     });
   });
