@@ -14,31 +14,34 @@ import type { Check } from "./types.js";
  */
 export const iosPlistCheck: Check = {
   id: "ios-plist",
-  title: "prebuild 산출물 Info.plist의 필수 키",
+  title: "Required Info.plist keys in the prebuild output",
   run({ cwd, config }) {
     return Promise.resolve(runIosPlist(cwd, config.ios?.infoPlist));
   },
 };
 
 export function runIosPlist(cwd: string, options: IosInfoPlistConfig | undefined): CheckResult {
-  if (!options) return { status: "skip", reason: "`ios.infoPlist` 설정이 없습니다." };
-  if (options.requiredKeys.length === 0) return { status: "skip", reason: "`ios.infoPlist.requiredKeys`가 비었습니다." };
+  if (!options) return { status: "skip", reason: "no `ios.infoPlist` config" };
+  const forbidden = options.forbidden ?? [];
+  if (options.requiredKeys.length === 0 && forbidden.length === 0) {
+    return { status: "skip", reason: "`ios.infoPlist` has no requiredKeys or forbidden entries" };
+  }
 
   const located = options.path === undefined ? findInfoPlist(cwd) : ok(path.resolve(cwd, options.path));
   if (!located.ok) return failWith(located.error);
   const plistPath = located.value;
   if (!existsSync(plistPath)) {
-    return failWith(`${path.relative(cwd, plistPath)}가 없습니다.`, "`npx expo prebuild --platform ios`를 먼저 실행하세요.");
+    return failWith(`${path.relative(cwd, plistPath)} does not exist.`, "Run `npx expo prebuild --platform ios` first.");
   }
 
   let info: unknown;
   try {
     info = parsePlist(readFileSync(plistPath, "utf8"));
   } catch (e) {
-    return failWith(`Info.plist를 해석하지 못했습니다: ${e instanceof Error ? e.message : String(e)}`);
+    return failWith(`Could not parse Info.plist: ${e instanceof Error ? e.message : String(e)}`);
   }
   if (typeof info !== "object" || info === null || Array.isArray(info)) {
-    return failWith("Info.plist 최상위가 dict가 아닙니다.");
+    return failWith("The top level of Info.plist is not a dict.");
   }
   const dict = info as Readonly<Record<string, unknown>>;
 
@@ -47,12 +50,24 @@ export function runIosPlist(cwd: string, options: IosInfoPlistConfig | undefined
       const value = dict[key];
       return typeof value !== "string" || value.trim() === "";
     })
-    .map(({ key, reason }) => ({ message: `${key}가 없거나 비었습니다.`, hint: reason }));
+    .map(({ key, reason }) => ({ message: `${key} is missing or empty.`, hint: reason }));
 
-  const total = options.requiredKeys.length;
+  for (const entry of forbidden) {
+    const value = dict[entry.key];
+    if (value === undefined) continue;
+    if (entry.values === undefined) {
+      problems.push({ message: `${entry.key} must not be present.`, hint: entry.reason });
+      continue;
+    }
+    const present = Array.isArray(value) ? value : [value];
+    const hit = entry.values.filter((v) => present.includes(v));
+    if (hit.length > 0) problems.push({ message: `${entry.key} contains ${hit.join(", ")}.`, hint: entry.reason });
+  }
+
+  const total = options.requiredKeys.length + forbidden.length;
   return problems.length === 0
-    ? { status: "pass", summary: `필수 키 ${String(total)}개 모두 존재` }
-    : { status: "fail", summary: `필수 키 ${String(total)}개 중 ${String(problems.length)}개 누락`, problems };
+    ? { status: "pass", summary: `all ${String(total)} Info.plist rule(s) satisfied` }
+    : { status: "fail", summary: `${String(problems.length)} of ${String(total)} Info.plist rule(s) violated`, problems };
 }
 
 function failWith(message: string, hint?: string): CheckResult {
@@ -66,7 +81,7 @@ const NOT_APP_TARGET = new Set(["Pods", "build", "DerivedData"]);
 export function findInfoPlist(cwd: string): Result<string> {
   const iosDir = path.join(cwd, "ios");
   if (!existsSync(iosDir)) {
-    return err("ios/ 디렉터리가 없습니다. `npx expo prebuild --platform ios`를 먼저 실행하세요.");
+    return err("No ios/ directory. Run `npx expo prebuild --platform ios` first.");
   }
   const candidates = readdirSync(iosDir)
     .filter((name) => !NOT_APP_TARGET.has(name) && !name.includes(".") && !name.endsWith("Tests"))
@@ -74,10 +89,10 @@ export function findInfoPlist(cwd: string): Result<string> {
     .filter((p) => existsSync(p) && statSync(p).isFile());
 
   const [only, ...rest] = candidates;
-  if (only === undefined) return err("ios/<앱 이름>/Info.plist를 찾지 못했습니다.");
+  if (only === undefined) return err("Could not find ios/<app name>/Info.plist.");
   if (rest.length > 0) {
     const list = candidates.map((c) => path.relative(cwd, c)).join(", ");
-    return err(`Info.plist 후보가 여럿입니다 (${list}). \`ios.infoPlist.path\`로 지정하세요.`);
+    return err(`Several Info.plist candidates (${list}). Set \`ios.infoPlist.path\`.`);
   }
   return ok(only);
 }

@@ -35,7 +35,7 @@ describe("android-manifest (소스)", () => {
     const cwd = makeProject({ [SOURCE]: manifest(uses("android.permission.INTERNET")) });
     const result = runAndroidManifest(cwd, rules, "source");
     expect(result).toMatchObject({ status: "fail" });
-    expect(JSON.stringify(result)).toContain("제거 지시자가 없습니다");
+    expect(JSON.stringify(result)).toContain("has no removal directive");
     expect(JSON.stringify(result)).toContain("blockedPermissions");
   });
 
@@ -43,7 +43,7 @@ describe("android-manifest (소스)", () => {
     const cwd = makeProject({
       [SOURCE]: manifest(uses("android.permission.INTERNET"), uses("android.permission.CAMERA")),
     });
-    expect(JSON.stringify(runAndroidManifest(cwd, rules, "source"))).toContain('tools:node=\\"remove\\" 없이');
+    expect(JSON.stringify(runAndroidManifest(cwd, rules, "source"))).toContain('without tools:node=\\"remove\\"');
   });
 
   it("금지 권한이 선언되면 이유와 함께 실패", () => {
@@ -56,8 +56,8 @@ describe("android-manifest (소스)", () => {
     });
     expect(runAndroidManifest(cwd, rules, "source")).toEqual({
       status: "fail",
-      summary: `${SOURCE}: 권한 규칙 3개 중 1개 위반`,
-      problems: [{ message: "READ_CONTACTS가 선언돼 있습니다.", hint: "연락처를 읽는 기능이 없다" }],
+      summary: `${SOURCE}: 1 of 3 permission rule(s) violated`,
+      problems: [{ message: "READ_CONTACTS is declared.", hint: "연락처를 읽는 기능이 없다" }],
     });
   });
 
@@ -94,7 +94,7 @@ describe("android-merged-manifest (병합본)", () => {
         uses("android.permission.CAMERA"),
       ),
     });
-    expect(JSON.stringify(runAndroidManifest(cwd, rules, "merged"))).toContain("CAMERA가 최종 매니페스트에 남아 있습니다");
+    expect(JSON.stringify(runAndroidManifest(cwd, rules, "merged"))).toContain("CAMERA is still in the final manifest");
   });
 
   it("점이 들어간 전체 이름 권한도 검사한다 (예: 광고 ID)", () => {
@@ -104,7 +104,7 @@ describe("android-merged-manifest (병합본)", () => {
       { requiredMerged: [{ name: "com.google.android.gms.permission.AD_ID", reason: "설치 광고 측정" }] },
       "merged",
     );
-    expect(JSON.stringify(result)).toContain("com.google.android.gms.permission.AD_ID가 없습니다");
+    expect(JSON.stringify(result)).toContain("com.google.android.gms.permission.AD_ID is missing");
   });
 
   it("Gradle 단계 전이면 무엇을 해야 하는지 알려 준다", () => {

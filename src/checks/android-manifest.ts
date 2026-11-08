@@ -17,7 +17,7 @@ import type { Check } from "./types.js";
  */
 export const androidManifestCheck: Check = {
   id: "android-manifest",
-  title: "prebuild 산출물 AndroidManifest.xml의 권한",
+  title: "Permissions in the prebuild AndroidManifest.xml",
   run({ cwd, config }) {
     return Promise.resolve(runAndroidManifest(cwd, config.android?.permissions, "source"));
   },
@@ -25,7 +25,7 @@ export const androidManifestCheck: Check = {
 
 export const androidMergedManifestCheck: Check = {
   id: "android-merged-manifest",
-  title: "Gradle 병합 매니페스트(최종본)의 권한",
+  title: "Permissions in the Gradle-merged manifest (what ships)",
   runsByDefault: false,
   run({ cwd, config }) {
     return Promise.resolve(runAndroidManifest(cwd, config.android?.permissions, "merged"));
@@ -42,11 +42,11 @@ export function runAndroidManifest(
   options: AndroidPermissionsConfig | undefined,
   mode: ManifestMode,
 ): CheckResult {
-  if (!options) return { status: "skip", reason: "`android.permissions` 설정이 없습니다." };
+  if (!options) return { status: "skip", reason: "no `android.permissions` config" };
   const required = [...(options.required ?? []), ...(mode === "merged" ? (options.requiredMerged ?? []) : [])];
   const forbidden = options.forbidden ?? [];
   if (required.length === 0 && forbidden.length === 0) {
-    return { status: "skip", reason: `${mode === "merged" ? "병합" : "소스"} 매니페스트에 적용할 권한 규칙이 없습니다.` };
+    return { status: "skip", reason: `no permission rules apply to the ${mode} manifest` };
   }
 
   const located = locateManifest(cwd, options, mode);
@@ -59,33 +59,33 @@ export function runAndroidManifest(
     const tag = permissions.get(normalizePermission(rule.name));
     if (mode === "merged") {
       // 병합본에 남은 권한은 그대로 앱에 실린다.
-      if (tag !== undefined) problems.push({ message: `${rule.name}가 최종 매니페스트에 남아 있습니다.`, hint: rule.reason });
+      if (tag !== undefined) problems.push({ message: `${rule.name} is still in the final manifest.`, hint: rule.reason });
     } else if (rule.blockedInSource === true) {
       if (tag === undefined) {
         problems.push({
-          message: `${rule.name}에 제거 지시자가 없습니다 (항목 자체가 없음).`,
-          hint: `${rule.reason} app.json의 android.blockedPermissions에서 빠진 것으로 보입니다.`,
+          message: `${rule.name} has no removal directive (the entry is gone).`,
+          hint: `${rule.reason} It looks like it was dropped from android.blockedPermissions in app.json.`,
         });
       } else if (!isRemoved(tag)) {
-        problems.push({ message: `${rule.name}가 tools:node="remove" 없이 선언돼 있습니다.`, hint: rule.reason });
+        problems.push({ message: `${rule.name} is declared without tools:node="remove".`, hint: rule.reason });
       }
     } else if (tag !== undefined && !isRemoved(tag)) {
-      problems.push({ message: `${rule.name}가 선언돼 있습니다.`, hint: rule.reason });
+      problems.push({ message: `${rule.name} is declared.`, hint: rule.reason });
     }
   }
 
   for (const rule of required) {
     const tag = permissions.get(normalizePermission(rule.name));
     if (tag === undefined || isRemoved(tag)) {
-      problems.push({ message: `${rule.name}가 없습니다.`, hint: rule.reason });
+      problems.push({ message: `${rule.name} is missing.`, hint: rule.reason });
     }
   }
 
   const where = path.relative(cwd, located.value);
   const total = required.length + forbidden.length;
   return problems.length === 0
-    ? { status: "pass", summary: `${where}: 권한 규칙 ${String(total)}개 모두 충족` }
-    : { status: "fail", summary: `${where}: 권한 규칙 ${String(total)}개 중 ${String(problems.length)}개 위반`, problems };
+    ? { status: "pass", summary: `${where}: all ${String(total)} permission rule(s) satisfied` }
+    : { status: "fail", summary: `${where}: ${String(problems.length)} of ${String(total)} permission rule(s) violated`, problems };
 }
 
 /** `<uses-permission …>` 태그를 전체 권한 이름 → 태그 원문으로 모은다. */
@@ -116,28 +116,28 @@ function locateManifest(
     return existsSync(p)
       ? ok(p)
       : err({
-          message: `${path.relative(cwd, p)}가 없습니다.`,
-          hint: "`npx expo prebuild --platform android --no-install`을 먼저 실행하세요.",
+          message: `${path.relative(cwd, p)} does not exist.`,
+          hint: "Run `npx expo prebuild --platform android --no-install` first.",
         });
   }
 
   if (options.mergedPath !== undefined) {
     const p = path.resolve(cwd, options.mergedPath);
-    return existsSync(p) ? ok(p) : err({ message: `${path.relative(cwd, p)}가 없습니다.` });
+    return existsSync(p) ? ok(p) : err({ message: `${path.relative(cwd, p)} does not exist.` });
   }
 
   const found = findMergedManifests(path.join(cwd, INTERMEDIATES));
   const [only, ...rest] = found;
   if (only === undefined) {
     return err({
-      message: `병합된 release 매니페스트를 찾지 못했습니다 (${INTERMEDIATES} 아래).`,
-      hint: "`(cd android && ./gradlew :app:processReleaseMainManifest)`를 먼저 실행하세요.",
+      message: `No merged release manifest found (under ${INTERMEDIATES}).`,
+      hint: "Run `(cd android && ./gradlew :app:processReleaseMainManifest)` first.",
     });
   }
   if (rest.length > 0) {
     // flavor가 여럿이거나 AGP가 경로를 바꾸면 엉뚱한 파일을 볼 수 있다 — 하나를 골라 통과시키지 않는다.
     const list = found.map((f) => path.relative(cwd, f)).join(", ");
-    return err({ message: `병합 매니페스트 후보가 여럿입니다 (${list}).`, hint: "`android.permissions.mergedPath`로 지정하세요." });
+    return err({ message: `Several merged manifest candidates (${list}).`, hint: "Set `android.permissions.mergedPath`." });
   }
   return ok(only);
 }

@@ -17,7 +17,7 @@ describe("cli", () => {
   it("통과하면 0으로 끝난다", async () => {
     const { code, stdout } = await run(["check"]);
     expect(code).toBe(EXIT.ok);
-    expect(stdout).toContain("✔ ios-plist: 필수 키 3개 모두 존재");
+    expect(stdout).toContain("✔ ios-plist: all 3 Info.plist rule(s) satisfied");
     expect(stdout).toContain("✔ android-manifest:");
     // Gradle 단계가 필요한 병합 검사는 id를 지정해야만 돈다
     expect(stdout).not.toContain("android-merged-manifest");
@@ -60,7 +60,7 @@ describe("cli", () => {
   it("설정 파일이 없으면 사용법 오류(2)", async () => {
     const { code, stderr } = await run(["check"], makeProject({}));
     expect(code).toBe(EXIT.usage);
-    expect(stderr).toContain("설정 파일이 없습니다");
+    expect(stderr).toContain("No config file found");
   });
 
   it("--cwd로 다른 프로젝트를 검사한다", async () => {
@@ -70,7 +70,7 @@ describe("cli", () => {
   it("list는 등록된 검사를 보여 준다", async () => {
     const { stdout } = await run(["list"]);
     expect(stdout).toMatch(/^ios-plist\t/);
-    expect(stdout).toContain("android-merged-manifest\tGradle 병합 매니페스트(최종본)의 권한 (id 지정 시에만)");
+    expect(stdout).toContain("android-merged-manifest\tPermissions in the Gradle-merged manifest (what ships) (only when named)");
   });
 
   it("병합 검사는 id로 실행하고, Gradle 단계 전이면 실패로 알려 준다", async () => {

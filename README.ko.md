@@ -8,12 +8,14 @@ Expo 앱의 **prebuild 산출물**을 릴리스 전에 검사하는 CLI입니다
 
 ```console
 $ npx expo-release-guard check
-✖ ios-plist: 필수 키 3개 중 1개 누락
-    - NSRemindersUsageDescription가 없거나 비었습니다.
+✖ ios-plist: 1 of 3 Info.plist rule(s) violated
+    - NSRemindersUsageDescription is missing or empty.
       안 쓰지만 필수 — expo-calendar가 앱 시작 시 조회한다. 없으면 스플래시에서 종료.
 
-1개 검사가 실패했습니다.
+1 check(s) failed.
 ```
+
+도구 메시지는 영어이고, 들여 쓴 줄은 설정에 적은 `reason`이 그대로 나옵니다(한국어로 적어도 됩니다).
 
 ## 왜 만들었나
 
@@ -84,11 +86,11 @@ Node.js 22.12 이상이 필요합니다.
 
 | id | 하는 일 | 문서 |
 | --- | --- | --- |
-| `ios-plist` | prebuild 산출물 `Info.plist`에 필수 키가 비어 있지 않은 문자열로 남아 있는지 | [docs/checks/ios-plist.md](docs/checks/ios-plist.md) |
+| `ios-plist` | prebuild 산출물 `Info.plist`에 필수 키가 비어 있지 않은 문자열로 남아 있는지, 금지 키·값(예: 백그라운드 모드)이 없는지 | [docs/checks/ios-plist.md](docs/checks/ios-plist.md) |
 | `android-manifest` | prebuild 산출물 매니페스트의 필수·금지 권한, `blockedPermissions` 제거 지시자 | [docs/checks/android-manifest.md](docs/checks/android-manifest.md) |
 | `android-merged-manifest` | Gradle 병합 매니페스트(최종본)의 필수·금지 권한 — id를 지정해 실행 | [docs/checks/android-manifest.md](docs/checks/android-manifest.md) |
 | `ios-alternate-icons` | 대체 앱 아이콘이 빌드 설정과 에셋 카탈로그 양쪽에 등록됐는지 | [docs/checks/app-icons.md](docs/checks/app-icons.md) |
-| `android-launcher-aliases` | 아이콘별 런처 별칭, 기본으로 켜진 별칭이 정확히 하나인지, 메인 액티비티 상태 | [docs/checks/app-icons.md](docs/checks/app-icons.md) |
+| `android-launcher-aliases` | 아이콘별 런처 별칭, 기본으로 켜진 별칭이 정확히 하나인지, 메인 액티비티가 켜져 있고 런처가 아니며 딥링크 action을 지키는지 | [docs/checks/app-icons.md](docs/checks/app-icons.md) |
 
 ## GitHub Action
 
@@ -97,12 +99,14 @@ Node.js 22.12 이상이 필요합니다.
 - uses: evan7484/expo-release-guard@v0
   with:
     prebuild: all        # none | ios | android | all
-    version: 0.2.0
+    version: 0.3.0
 ```
 
 이식 예정: OTA 채널·런타임 버전 대조.
 
 ## 문서
+
+레퍼런스 문서는 영어입니다.
 
 - [CLI 레퍼런스](docs/cli.md) — 명령, 옵션, 종료 코드, JSON 출력 형식
 - [설정 레퍼런스](docs/configuration.md) — 설정 파일 위치와 스키마

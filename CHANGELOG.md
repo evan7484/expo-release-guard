@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- **All CLI output is now English** (help, check results, config errors, `init` notes). Reference docs and the contributing guide are English too; `README.ko.md` stays. Your own `reason` text is printed as-is. *If you match on the old Korean output in scripts, update them.*
+- **`ios.infoPlist.forbidden`**: keys that must not exist, or values a key must not contain — e.g. `UIBackgroundModes` must not contain `processing`. `requiredKeys` is now optional.
+- **`android.launcherAliases.mainActivityActions`**: intent actions the main activity must keep (e.g. `android.intent.action.VIEW` for deep links) after the launcher moves to aliases. `init` fills it from the current output.
+- `ios-plist` summary now counts rules (`all N Info.plist rule(s) satisfied`) since it covers forbidden entries too.
+
 ## 0.2.0
 
 - **`init`**: 지금 prebuild 산출물을 읽어 `release-guard.config.json` 초안을 만든다 — 권한 문구, 대체 아이콘, Android 권한(제거 지시자 포함), 병합본에만 있는 라이브러리 권한, 런처 별칭. `--force`, `--stdout`.

@@ -30,14 +30,14 @@ export function buildInitialConfig(cwd: string): Result<InitDraft> {
   const android = draftAndroid(cwd, notes);
   if (ios === undefined && android === undefined) {
     return err(
-      "ios/·android/ 산출물을 찾지 못했습니다. `npx expo prebuild --no-install`을 먼저 실행하세요 (Android 병합 권한까지 담으려면 `./gradlew :app:processReleaseMainManifest`도).",
+      "No ios/ or android/ output found. Run `npx expo prebuild --no-install` first (and `./gradlew :app:processReleaseMainManifest` to include library permissions from the merged manifest).",
     );
   }
   const config: Config = {
     ...(ios === undefined ? {} : { ios }),
     ...(android === undefined ? {} : { android }),
   };
-  notes.push(`reason이 "${TODO_REASON}"인 항목을 채우세요 — 실패했을 때 다음 사람이 보는 설명입니다.`);
+  notes.push(`Replace every "${TODO_REASON}" reason — it is what the next person reads when the check fails.`);
   return ok({ config, notes });
 }
 
@@ -55,13 +55,13 @@ function draftIos(cwd: string, notes: string[]): Config["ios"] {
         .sort((a, b) => a.key.localeCompare(b.key));
     }
   } catch {
-    notes.push(`${path.relative(cwd, plistPath.value)}를 해석하지 못해 권한 문구를 건너뛰었습니다.`);
+    notes.push(`Could not parse ${path.relative(cwd, plistPath.value)}; skipped usage descriptions.`);
   }
-  notes.push(`iOS: 권한 문구 ${String(requiredKeys.length)}개 (${path.relative(cwd, plistPath.value)})`);
+  notes.push(`iOS: ${String(requiredKeys.length)} usage description(s) (${path.relative(cwd, plistPath.value)})`);
 
   const project = findPbxproj(cwd);
   const iconNames = project.ok ? (readAlternateIconNames(readFileSync(project.value, "utf8"))[0] ?? []) : [];
-  if (iconNames.length > 0) notes.push(`iOS: 대체 아이콘 ${String(iconNames.length)}개`);
+  if (iconNames.length > 0) notes.push(`iOS: ${String(iconNames.length)} alternate icon(s)`);
 
   return {
     infoPlist: { requiredKeys },
@@ -82,7 +82,7 @@ function draftAndroid(cwd: string, notes: string[]): Config["android"] {
     if (isRemoved(tag)) forbidden.push({ name: short, reason: TODO_REASON, blockedInSource: true });
     else required.push({ name: short, reason: TODO_REASON });
   }
-  notes.push(`Android: 소스 매니페스트 권한 ${String(required.length)}개, 제거 지시자 ${String(forbidden.length)}개`);
+  notes.push(`Android: ${String(required.length)} permission(s) in the source manifest, ${String(forbidden.length)} removal directive(s)`);
 
   // 병합본이 있으면 라이브러리가 넣은 권한(소스에 없는 것)을 requiredMerged로 고정한다.
   const requiredMerged: PermissionRule[] = [];
@@ -91,23 +91,32 @@ function draftAndroid(cwd: string, notes: string[]): Config["android"] {
     for (const [name, tag] of [...readPermissions(readFileSync(merged, "utf8"))].sort(([a], [b]) => a.localeCompare(b))) {
       if (!source.has(name) && !isRemoved(tag)) requiredMerged.push({ name: shortPermission(name), reason: TODO_REASON });
     }
-    notes.push(`Android: 병합본에만 있는 권한 ${String(requiredMerged.length)}개 — 라이브러리가 넣은 것 중 남길 것만 두고 나머지는 forbidden으로 옮기세요.`);
+    notes.push(`Android: ${String(requiredMerged.length)} permission(s) only in the merged manifest — keep the ones you want from libraries and move the rest to forbidden.`);
   } else {
     notes.push(
       merged === undefined
-        ? "Android: 병합 매니페스트가 없어 라이브러리 권한(requiredMerged)은 비웠습니다. Gradle `:app:processReleaseMainManifest` 뒤에 다시 실행하면 채워집니다."
-        : "Android: 병합 매니페스트 후보가 여럿이라 requiredMerged는 비웠습니다.",
+        ? "Android: no merged manifest, so requiredMerged (library permissions) is empty. Re-run after Gradle `:app:processReleaseMainManifest` to fill it."
+        : "Android: several merged manifest candidates, so requiredMerged is empty.",
     );
   }
 
   const aliases = readActivities(sourceXml, "activity-alias").filter((a) => a.launcher);
   const enabled = aliases.filter((a) => a.enabled);
+  // 런처를 별칭으로 옮긴 앱이면, 메인 액티비티에 남은 진입점(딥링크 VIEW 등)도 지금 상태로 고정한다.
+  const mainActions =
+    readActivities(sourceXml, "activity")
+      .find((a) => a.name.endsWith(".MainActivity"))
+      ?.actions.filter((a) => a !== "android.intent.action.MAIN") ?? [];
   const launcherAliases =
     aliases.length > 0 && enabled.length === 1 && enabled[0] !== undefined
-      ? { aliases: aliases.map((a) => lastSegment(a.name)), enabledByDefault: lastSegment(enabled[0].name) }
+      ? {
+          aliases: aliases.map((a) => lastSegment(a.name)),
+          enabledByDefault: lastSegment(enabled[0].name),
+          ...(mainActions.length > 0 ? { mainActivityActions: [...new Set(mainActions)].sort() } : {}),
+        }
       : undefined;
-  if (launcherAliases) notes.push(`Android: 런처 별칭 ${String(launcherAliases.aliases.length)}개`);
-  else if (aliases.length > 0) notes.push(`Android: 런처 별칭이 있지만 켜진 것이 ${String(enabled.length)}개라 설정에 넣지 않았습니다.`);
+  if (launcherAliases) notes.push(`Android: ${String(launcherAliases.aliases.length)} launcher alias(es)`);
+  else if (aliases.length > 0) notes.push(`Android: launcher aliases found, but ${String(enabled.length)} are enabled, so they were left out.`);
 
   return {
     permissions: { required, ...(requiredMerged.length > 0 ? { requiredMerged } : {}), forbidden },

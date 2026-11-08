@@ -9,10 +9,23 @@ export interface RequiredKey {
   readonly reason: string;
 }
 
+/**
+ * Info.plist에 있으면 안 되는 키 또는 값. `values`가 없으면 키 자체가 없어야 하고, 있으면 키의 값
+ * (문자열이나 문자열 배열)이 그 중 어느 것도 담으면 안 된다 — 예: `UIBackgroundModes`에 `processing`.
+ * 다른 플랫폼용 플러그인이 iOS 권한·백그라운드 모드를 끌어오면 심사에서 사유를 요구받는다.
+ */
+export interface ForbiddenPlistEntry {
+  readonly key: string;
+  readonly values?: readonly string[];
+  readonly reason: string;
+}
+
 export interface IosInfoPlistConfig {
   /** cwd 기준 Info.plist 경로. 생략하면 `ios/<앱 이름>/Info.plist`를 찾는다. */
   readonly path?: string;
+  /** 설정 파일에서는 생략할 수 있다 — 읽을 때 빈 배열로 채운다. */
   readonly requiredKeys: readonly RequiredKey[];
+  readonly forbidden?: readonly ForbiddenPlistEntry[];
 }
 
 /**
@@ -73,6 +86,11 @@ export interface AndroidLauncherAliasesConfig {
   readonly mainActivity?: string;
   /** cwd 기준 매니페스트 경로. 기본 `android/app/src/main/AndroidManifest.xml` */
   readonly manifestPath?: string;
+  /**
+   * 메인 액티비티가 계속 가져야 하는 intent action (예: 딥링크용 `android.intent.action.VIEW`).
+   * 런처를 별칭으로 옮기면서 메인 액티비티의 intent-filter를 통째로 지우면 딥링크·알림 진입이 끊긴다.
+   */
+  readonly mainActivityActions?: readonly string[];
 }
 
 export interface Config {
@@ -104,8 +122,8 @@ export async function loadConfig(cwd: string, explicitPath?: string): Promise<Re
   if (!file) {
     return err(
       explicitPath
-        ? `설정 파일이 없습니다: ${explicitPath}`
-        : `설정 파일이 없습니다. ${CONFIG_FILENAMES.join(", ")} 중 하나를 만드세요.`,
+        ? `Config file not found: ${explicitPath}`
+        : `No config file found. Create one of ${CONFIG_FILENAMES.join(", ")} (or run \`expo-release-guard init\`).`,
     );
   }
 
@@ -115,7 +133,7 @@ export async function loadConfig(cwd: string, explicitPath?: string): Promise<Re
       ? (JSON.parse(readFileSync(file, "utf8")) as unknown)
       : ((await import(pathToFileURL(file).href)) as { default?: unknown }).default;
   } catch (e) {
-    return err(`설정 파일을 읽지 못했습니다 (${path.relative(cwd, file)}): ${e instanceof Error ? e.message : String(e)}`);
+    return err(`Could not read the config file (${path.relative(cwd, file)}): ${e instanceof Error ? e.message : String(e)}`);
   }
 
   const parsed = parseConfig(raw);
@@ -129,7 +147,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
  * 모양이 틀리면 여기서 어디가 틀렸는지 알려 주고 끝낸다.
  */
 export function parseConfig(raw: unknown): Result<Config> {
-  if (!isRecord(raw)) return err("설정은 객체여야 합니다.");
+  if (!isRecord(raw)) return err("The config must be an object.");
 
   const ios = parseIos(raw["ios"]);
   if (!ios.ok) return ios;
@@ -144,52 +162,85 @@ export function parseConfig(raw: unknown): Result<Config> {
 
 function parseIos(ios: unknown): Result<Config["ios"]> {
   if (ios === undefined) return ok(undefined);
-  if (!isRecord(ios)) return err("`ios`는 객체여야 합니다.");
+  if (!isRecord(ios)) return err("`ios` must be an object.");
 
   const icons = parseAlternateIcons(ios["alternateIcons"]);
   if (!icons.ok) return icons;
   const withIcons = icons.value === undefined ? {} : { alternateIcons: icons.value };
   const { infoPlist } = ios;
   if (infoPlist === undefined) return ok(withIcons);
-  if (!isRecord(infoPlist)) return err("`ios.infoPlist`는 객체여야 합니다.");
+  if (!isRecord(infoPlist)) return err("`ios.infoPlist` must be an object.");
 
-  const { path: plistPath, requiredKeys } = infoPlist;
-  if (plistPath !== undefined && typeof plistPath !== "string") return err("`ios.infoPlist.path`는 문자열이어야 합니다.");
-  if (!Array.isArray(requiredKeys)) return err("`ios.infoPlist.requiredKeys`는 배열이어야 합니다.");
+  const { path: plistPath } = infoPlist;
+  const requiredKeys = infoPlist["requiredKeys"] ?? [];
+  if (plistPath !== undefined && typeof plistPath !== "string") return err("`ios.infoPlist.path` must be a string.");
+  if (!Array.isArray(requiredKeys)) return err("`ios.infoPlist.requiredKeys` must be an array.");
 
   const keys: RequiredKey[] = [];
   for (const [i, item] of requiredKeys.entries()) {
     if (!isRecord(item) || typeof item["key"] !== "string" || typeof item["reason"] !== "string") {
-      return err(`\`ios.infoPlist.requiredKeys[${String(i)}]\`는 { key: string, reason: string } 이어야 합니다.`);
+      return err(`\`ios.infoPlist.requiredKeys[${String(i)}]\` must be { key: string, reason: string }.`);
     }
-    if (item["key"].trim() === "") return err(`\`ios.infoPlist.requiredKeys[${String(i)}].key\`가 비었습니다.`);
+    if (item["key"].trim() === "") return err(`\`ios.infoPlist.requiredKeys[${String(i)}].key\` is empty.`);
     keys.push({ key: item["key"], reason: item["reason"] });
   }
 
   const dup = firstDuplicate(keys.map((k) => k.key));
-  if (dup !== undefined) return err(`\`ios.infoPlist.requiredKeys\`에 ${dup}가 중복됩니다.`);
+  if (dup !== undefined) return err(`\`ios.infoPlist.requiredKeys\` lists ${dup} more than once.`);
+
+  const forbidden = parseForbiddenPlist(infoPlist["forbidden"]);
+  if (!forbidden.ok) return forbidden;
+  const clash = forbidden.value.find((f) => f.values === undefined && keys.some((k) => k.key === f.key));
+  if (clash) return err(`\`ios.infoPlist\`: ${clash.key} is both required and forbidden.`);
 
   return ok({
     ...withIcons,
-    infoPlist: plistPath === undefined ? { requiredKeys: keys } : { path: plistPath, requiredKeys: keys },
+    infoPlist: {
+      ...(plistPath === undefined ? {} : { path: plistPath }),
+      requiredKeys: keys,
+      ...(forbidden.value.length > 0 ? { forbidden: forbidden.value } : {}),
+    },
   });
+}
+
+function parseForbiddenPlist(raw: unknown): Result<ForbiddenPlistEntry[]> {
+  if (raw === undefined) return ok([]);
+  const where = "ios.infoPlist.forbidden";
+  if (!Array.isArray(raw)) return err(`\`${where}\` must be an array.`);
+  const entries: ForbiddenPlistEntry[] = [];
+  for (const [i, item] of raw.entries()) {
+    const at = `\`${where}[${String(i)}]\``;
+    if (!isRecord(item) || typeof item["key"] !== "string" || typeof item["reason"] !== "string") {
+      return err(`${at} must be { key: string, reason: string, values?: string[] }.`);
+    }
+    if (item["key"].trim() === "") return err(`${at}.key is empty.`);
+    const values = item["values"];
+    if (values === undefined) {
+      entries.push({ key: item["key"], reason: item["reason"] });
+      continue;
+    }
+    const parsed = parseNames(values, `${where}[${String(i)}].values`);
+    if (!parsed.ok) return parsed;
+    entries.push({ key: item["key"], values: parsed.value, reason: item["reason"] });
+  }
+  return ok(entries);
 }
 
 function parseAndroid(android: unknown): Result<Config["android"]> {
   if (android === undefined) return ok(undefined);
-  if (!isRecord(android)) return err("`android`는 객체여야 합니다.");
+  if (!isRecord(android)) return err("`android` must be an object.");
 
   const aliases = parseLauncherAliases(android["launcherAliases"]);
   if (!aliases.ok) return aliases;
   const withAliases = aliases.value === undefined ? {} : { launcherAliases: aliases.value };
   const { permissions } = android;
   if (permissions === undefined) return ok(withAliases);
-  if (!isRecord(permissions)) return err("`android.permissions`는 객체여야 합니다.");
+  if (!isRecord(permissions)) return err("`android.permissions` must be an object.");
 
   const where = "android.permissions";
   for (const key of ["sourcePath", "mergedPath"] as const) {
     const v = permissions[key];
-    if (v !== undefined && typeof v !== "string") return err(`\`${where}.${key}\`는 문자열이어야 합니다.`);
+    if (v !== undefined && typeof v !== "string") return err(`\`${where}.${key}\` must be a string.`);
   }
 
   const required = parseRules(permissions["required"], `${where}.required`, false);
@@ -202,7 +253,7 @@ function parseAndroid(android: unknown): Result<Config["android"]> {
   // 같은 권한을 "있어야 한다"와 "있으면 안 된다"에 동시에 두면 어느 쪽으로도 통과할 수 없다.
   const wanted = new Set([...required.value, ...requiredMerged.value].map((r) => normalizePermission(r.name)));
   const clash = forbidden.value.find((r) => wanted.has(normalizePermission(r.name)));
-  if (clash) return err(`\`${where}\`: ${clash.name}가 required와 forbidden에 함께 있습니다.`);
+  if (clash) return err(`\`${where}\`: ${clash.name} is both required and forbidden.`);
 
   const sourcePath = permissions["sourcePath"];
   const mergedPath = permissions["mergedPath"];
@@ -220,19 +271,19 @@ function parseAndroid(android: unknown): Result<Config["android"]> {
 
 function parseRules(raw: unknown, where: string, allowBlocked: boolean): Result<ForbiddenPermissionRule[]> {
   if (raw === undefined) return ok([]);
-  if (!Array.isArray(raw)) return err(`\`${where}\`는 배열이어야 합니다.`);
+  if (!Array.isArray(raw)) return err(`\`${where}\` must be an array.`);
 
   const rules: ForbiddenPermissionRule[] = [];
   for (const [i, item] of raw.entries()) {
     const at = `\`${where}[${String(i)}]\``;
     if (!isRecord(item) || typeof item["name"] !== "string" || typeof item["reason"] !== "string") {
-      return err(`${at}는 { name: string, reason: string } 이어야 합니다.`);
+      return err(`${at} must be { name: string, reason: string }.`);
     }
-    if (item["name"].trim() === "") return err(`${at}.name이 비었습니다.`);
+    if (item["name"].trim() === "") return err(`${at}.name is empty.`);
     const blocked = item["blockedInSource"];
     if (blocked !== undefined) {
-      if (!allowBlocked) return err(`${at}.blockedInSource는 forbidden에서만 쓸 수 있습니다.`);
-      if (typeof blocked !== "boolean") return err(`${at}.blockedInSource는 boolean이어야 합니다.`);
+      if (!allowBlocked) return err(`${at}.blockedInSource is only allowed in forbidden.`);
+      if (typeof blocked !== "boolean") return err(`${at}.blockedInSource must be a boolean.`);
     }
     rules.push(
       blocked === true
@@ -242,34 +293,34 @@ function parseRules(raw: unknown, where: string, allowBlocked: boolean): Result<
   }
 
   const dup = firstDuplicate(rules.map((r) => normalizePermission(r.name)));
-  if (dup !== undefined) return err(`\`${where}\`에 ${dup}가 중복됩니다.`);
+  if (dup !== undefined) return err(`\`${where}\` lists ${dup} more than once.`);
   return ok(rules);
 }
 
 function parseNames(raw: unknown, where: string): Result<string[]> {
-  if (!Array.isArray(raw) || raw.length === 0) return err(`\`${where}\`는 비어 있지 않은 문자열 배열이어야 합니다.`);
+  if (!Array.isArray(raw) || raw.length === 0) return err(`\`${where}\` must be a non-empty array of strings.`);
   const names: string[] = [];
   for (const [i, item] of raw.entries()) {
     if (typeof item !== "string" || item.trim() === "") {
-      return err(`\`${where}[${String(i)}]\`는 비어 있지 않은 문자열이어야 합니다.`);
+      return err(`\`${where}[${String(i)}]\` must be a non-empty string.`);
     }
     names.push(item.trim());
   }
   const dup = firstDuplicate(names);
-  if (dup !== undefined) return err(`\`${where}\`에 ${dup}가 중복됩니다.`);
+  if (dup !== undefined) return err(`\`${where}\` lists ${dup} more than once.`);
   return ok(names);
 }
 
 function optionalString(record: Record<string, unknown>, key: string, where: string): Result<string | undefined> {
   const v = record[key];
   if (v === undefined) return ok(undefined);
-  return typeof v === "string" && v.trim() !== "" ? ok(v) : err(`\`${where}.${key}\`는 비어 있지 않은 문자열이어야 합니다.`);
+  return typeof v === "string" && v.trim() !== "" ? ok(v) : err(`\`${where}.${key}\` must be a non-empty string.`);
 }
 
 function parseAlternateIcons(raw: unknown): Result<IosAlternateIconsConfig | undefined> {
   if (raw === undefined) return ok(undefined);
   const where = "ios.alternateIcons";
-  if (!isRecord(raw)) return err(`\`${where}\`는 객체여야 합니다.`);
+  if (!isRecord(raw)) return err(`\`${where}\` must be an object.`);
   const names = parseNames(raw["names"], `${where}.names`);
   if (!names.ok) return names;
   const projectPath = optionalString(raw, "projectPath", where);
@@ -286,22 +337,26 @@ function parseAlternateIcons(raw: unknown): Result<IosAlternateIconsConfig | und
 function parseLauncherAliases(raw: unknown): Result<AndroidLauncherAliasesConfig | undefined> {
   if (raw === undefined) return ok(undefined);
   const where = "android.launcherAliases";
-  if (!isRecord(raw)) return err(`\`${where}\`는 객체여야 합니다.`);
+  if (!isRecord(raw)) return err(`\`${where}\` must be an object.`);
   const aliases = parseNames(raw["aliases"], `${where}.aliases`);
   if (!aliases.ok) return aliases;
   const enabled = raw["enabledByDefault"];
   if (typeof enabled !== "string" || !aliases.value.includes(enabled)) {
-    return err(`\`${where}.enabledByDefault\`는 aliases 중 하나여야 합니다.`);
+    return err(`\`${where}.enabledByDefault\` must be one of aliases.`);
   }
   const mainActivity = optionalString(raw, "mainActivity", where);
   if (!mainActivity.ok) return mainActivity;
   const manifestPath = optionalString(raw, "manifestPath", where);
   if (!manifestPath.ok) return manifestPath;
+  const actionsRaw = raw["mainActivityActions"];
+  const actions = actionsRaw === undefined ? ok(undefined) : parseNames(actionsRaw, `${where}.mainActivityActions`);
+  if (!actions.ok) return actions;
   return ok({
     aliases: aliases.value,
     enabledByDefault: enabled,
     ...(mainActivity.value === undefined ? {} : { mainActivity: mainActivity.value }),
     ...(manifestPath.value === undefined ? {} : { manifestPath: manifestPath.value }),
+    ...(actions.value === undefined ? {} : { mainActivityActions: actions.value }),
   });
 }
 

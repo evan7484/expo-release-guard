@@ -27,7 +27,7 @@ inputs:
   version:
     description: expo-release-guard version from npm. Pin it for reproducible CI.
     required: false
-    default: "0.2.0"
+    default: "0.3.0"
 
 runs:
   using: composite
@@ -46,7 +46,7 @@ runs:
         ERG_VERSION: ${{ inputs.version }}
         ERG_CHECKS: ${{ inputs.checks }}
         ERG_CONFIG: ${{ inputs.config }}
-      # 입력을 셸에 직접 끼우지 않고 env로 넘긴다 — 워크플로 입력을 통한 명령 주입을 막기 위해.
+      # Pass inputs through env instead of splicing them into the script, so workflow inputs cannot inject commands.
       run: |
         args=(check)
         if [ -n "$ERG_CHECKS" ]; then read -r -a ids <<< "$ERG_CHECKS"; args+=("${ids[@]}"); fi

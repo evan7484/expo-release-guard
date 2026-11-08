@@ -1,15 +1,15 @@
 # `ios-alternate-icons` · `android-launcher-aliases`
 
-앱 아이콘을 바꾸는 기능(iOS `setAlternateIconName`, Android 런처 별칭)이 prebuild 산출물에 제대로 등록됐는지 검사합니다.
+Checks that app-icon switching (iOS `setAlternateIconName`, Android launcher aliases) is correctly registered in the prebuild output.
 
-## 왜 산출물을 보나
+## Why check the output
 
-아이콘 변경은 config plugin이 네이티브 프로젝트 **여러 곳을 함께** 고쳐야 동작합니다. 한 곳만 빠져도 빌드·업로드는 통과하고, 사용자가 아이콘을 바꾸는 순간에만 실패합니다.
+Icon switching works only when a config plugin edits **several places** of the native project together. If one is missing, the build and upload still pass; it fails only when a user switches icons.
 
-- iOS: 빌드 설정 `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`와 에셋 카탈로그의 `<이름>.appiconset`이 둘 다 있어야 합니다. 하나라도 빠지면 아이콘 변경이 조용히 실패합니다.
-- Android: 아이콘마다 `<activity-alias>`가 있고, LAUNCHER intent-filter를 갖고, **기본으로 켜진 별칭은 정확히 하나**여야 합니다. 0개면 런처에서 앱이 사라지고, 2개 이상이면 아이콘이 여럿 보입니다. 메인 액티비티에 LAUNCHER가 남아 있어도 아이콘이 하나 더 생깁니다.
+- iOS: both the build setting `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` and an `<name>.appiconset` in the asset catalog are needed. Missing either, the icon change fails silently.
+- Android: each icon needs an `<activity-alias>` with a LAUNCHER intent-filter, and **exactly one alias may be enabled by default**. With none, the app disappears from the launcher; with two or more, it shows several icons. A LAUNCHER left on the main activity adds one more icon. And when the launcher moves to aliases, the main activity must keep its other entry points (deep links).
 
-## 설정
+## Config
 
 ```json
 {
@@ -19,46 +19,49 @@
   "android": {
     "launcherAliases": {
       "aliases": ["MainActivityDefault", "MainActivitySunny", "MainActivityRainy"],
-      "enabledByDefault": "MainActivityDefault"
+      "enabledByDefault": "MainActivityDefault",
+      "mainActivityActions": ["android.intent.action.VIEW"]
     }
   }
 }
 ```
 
-| 필드 | 필수 | 설명 |
+| Field | Required | Description |
 | --- | --- | --- |
-| `ios.alternateIcons.names` | 예 | 대체 아이콘 이름. 빌드 설정과 `<이름>.appiconset`을 모두 확인합니다. |
-| `ios.alternateIcons.projectPath` | 아니오 | `project.pbxproj` 경로. 생략하면 `ios/*.xcodeproj`(Pods 제외)를 찾고, 여럿이면 지정을 요구합니다. |
-| `ios.alternateIcons.assetCatalogPath` | 아니오 | `.xcassets` 경로. 생략하면 `Info.plist` 옆의 `Images.xcassets`. |
-| `android.launcherAliases.aliases` | 예 | 별칭 `android:name`의 끝부분. |
-| `android.launcherAliases.enabledByDefault` | 예 | 기본으로 켜져 있어야 하는 별칭 (`aliases` 중 하나). |
-| `android.launcherAliases.mainActivity` | 아니오 | 메인 액티비티 이름 끝부분. 기본 `.MainActivity`. |
-| `android.launcherAliases.manifestPath` | 아니오 | 매니페스트 경로. 기본 prebuild 소스 매니페스트. |
+| `ios.alternateIcons.names` | yes | Alternate icon names. Both the build setting and `<name>.appiconset` are checked. |
+| `ios.alternateIcons.projectPath` | no | `project.pbxproj` path. Omit to find `ios/*.xcodeproj` (excluding Pods); several candidates require this. |
+| `ios.alternateIcons.assetCatalogPath` | no | `.xcassets` path. Defaults to `Images.xcassets` next to `Info.plist`. |
+| `android.launcherAliases.aliases` | yes | The end of each alias's `android:name`. |
+| `android.launcherAliases.enabledByDefault` | yes | The alias that must be enabled by default (one of `aliases`). |
+| `android.launcherAliases.mainActivity` | no | The end of the main activity's name. Default `.MainActivity`. |
+| `android.launcherAliases.manifestPath` | no | Manifest path. Default: the prebuild source manifest. |
+| `android.launcherAliases.mainActivityActions` | no | Intent actions the main activity must keep, e.g. `android.intent.action.VIEW` for deep links. |
 
-## iOS가 잡는 것
+## What iOS catches
 
-| 문제 | 메시지 |
+| Problem | Message |
 | --- | --- |
-| 빌드 설정이 아예 없음 (plugin 누락) | `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES이 없습니다.` |
-| 빌드 구성(Debug·Release) 중 하나라도 목록이 다름 | `…가 설정과 다릅니다 (누락: … / 추가: …)` |
-| `<이름>.appiconset`이 없음 | `<이름>.appiconset이 없습니다.` |
-| `Contents.json`이 가리키는 이미지 파일이 없음 | `<이름>.appiconset에 실제 이미지 파일이 없습니다.` |
+| No build setting at all (plugin missing) | `Build setting ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES is missing.` |
+| A build configuration (Debug, Release) lists different icons | `… does not match the config (missing: … / extra: …).` |
+| No `<name>.appiconset` | `<name>.appiconset does not exist.` |
+| An image referenced by `Contents.json` does not exist | `<name>.appiconset has no actual image file.` |
 
-빌드 설정 값은 `"A B"`, `A`, `( A, "B", )` 세 가지 꼴을 모두 읽습니다.
+The build setting is read in all three forms: `"A B"`, `A`, and `( A, "B", )`.
 
-## Android가 잡는 것
+## What Android catches
 
-| 문제 | 메시지 |
+| Problem | Message |
 | --- | --- |
-| 별칭이 없음 | `별칭 X가 없습니다.` |
-| 별칭에 LAUNCHER intent-filter가 없음 | `별칭 X에 LAUNCHER intent-filter가 없습니다.` |
-| 기본 켜짐 상태가 기대와 다름 | `별칭 X가 기본 켜짐입니다 (기대: 꺼짐).` |
-| 설정에 없는 별칭이 켜진 런처로 선언됨 | `설정에 없는 별칭 X가 켜진 런처로 선언돼 있습니다.` |
-| 메인 액티비티에 LAUNCHER가 남음 | `메인 액티비티에 LAUNCHER intent-filter가 남아 있습니다.` |
-| 메인 액티비티가 꺼짐 (딥링크·알림 진입이 끊김) | `메인 액티비티가 꺼져 있습니다.` |
+| Alias missing | `Alias X is missing.` |
+| Alias without a LAUNCHER intent-filter | `Alias X has no LAUNCHER intent-filter.` |
+| Default enabled state differs | `Alias X is enabled by default (expected: disabled).` |
+| An alias not in the config is an enabled launcher | `Alias X is not in the config but is an enabled launcher.` |
+| LAUNCHER left on the main activity | `The main activity still has a LAUNCHER intent-filter.` |
+| Main activity disabled (deep links and notifications cannot open the app) | `The main activity is disabled.` |
+| Main activity lost a required action | `The main activity lost its android.intent.action.VIEW intent-filter.` |
 
-`android:enabled`를 생략한 요소는 켜진 것으로 봅니다(Android 기본값).
+An element without `android:enabled` counts as enabled (Android's default).
 
-## 결과
+## Result
 
-설정이 없으면 `skip`, 모두 맞으면 `pass`, 하나라도 어긋나면 `fail`이고 **어긋난 것을 한 번에 모두** 보고합니다.
+`skip` without config, `pass` when everything matches, `fail` otherwise — and **every** mismatch is reported at once.
