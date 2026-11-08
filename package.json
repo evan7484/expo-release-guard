@@ -22,7 +22,7 @@
     "node": ">=22.12"
   },
   "bin": {
-    "expo-release-guard": "./dist/cli.js"
+    "expo-release-guard": "dist/cli.js"
   },
   "exports": {
     ".": {
