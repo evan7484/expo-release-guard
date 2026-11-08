@@ -17,7 +17,7 @@ const api: PlistApi = (() => {
   if (hasParse(mod)) return mod;
   const inner: unknown = (mod as { default?: unknown } | null)?.default;
   if (hasParse(inner)) return inner;
-  throw new Error("@expo/plist의 parse를 찾지 못했습니다.");
+  throw new Error("Could not find parse() in @expo/plist.");
 })();
 
 export function parsePlist(xml: string): unknown {

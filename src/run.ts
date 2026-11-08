@@ -27,7 +27,7 @@ export async function runChecks({ cwd, config, only }: RunOptions): Promise<Resu
       result = await check.run({ cwd, config });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      result = { status: "fail", summary: "검사 도중 예외가 발생했습니다.", problems: [{ message }] };
+      result = { status: "fail", summary: "The check threw an exception.", problems: [{ message }] };
     }
     reports.push({ id: check.id, title: check.title, result });
   }
@@ -38,7 +38,7 @@ function selectChecks(only: readonly string[] | undefined): Result<readonly Chec
   if (!only || only.length === 0) return ok(registry.filter((c) => c.runsByDefault !== false));
   const unknown = only.filter((id) => !registry.some((c) => c.id === id));
   if (unknown.length > 0) {
-    return err(`알 수 없는 검사: ${unknown.join(", ")} (가능: ${registry.map((c) => c.id).join(", ")})`);
+    return err(`Unknown check: ${unknown.join(", ")} (available: ${registry.map((c) => c.id).join(", ")})`);
   }
   return ok(registry.filter((c) => only.includes(c.id)));
 }

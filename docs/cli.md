@@ -1,73 +1,74 @@
-# CLI 레퍼런스
+# CLI reference
 
 ```
 expo-release-guard init [--force] [--stdout]
-expo-release-guard check [검사 id...] [옵션]
+expo-release-guard check [check id...] [options]
 expo-release-guard list
 ```
 
 ## `init`
 
-지금 prebuild 산출물을 읽어 `release-guard.config.json` 초안을 만듭니다. **지금 상태를 기준선으로 고정**하는 것이 목적입니다.
+Reads the current prebuild output and writes a `release-guard.config.json` draft. The goal is to **freeze today's output as the baseline**.
 
 ```bash
 npx expo prebuild --clean --no-install
-(cd android && ./gradlew :app:processReleaseMainManifest)   # 선택 — 라이브러리 권한까지 담으려면
+(cd android && ./gradlew :app:processReleaseMainManifest)   # optional — includes library permissions
 npx expo-release-guard init
 ```
 
-| 산출물 | 초안에 들어가는 것 |
+| Output | Goes into |
 | --- | --- |
-| `Info.plist`의 `NS*UsageDescription` (값이 비지 않은 것) | `ios.infoPlist.requiredKeys` |
-| 빌드 설정 `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` | `ios.alternateIcons.names` |
-| 소스 매니페스트 권한 | `android.permissions.required` |
-| 소스 매니페스트의 `tools:node="remove"` 권한 | `android.permissions.forbidden` (`blockedInSource: true`) |
-| 병합 매니페스트에만 있는 권한 (Gradle 단계 뒤) | `android.permissions.requiredMerged` |
-| LAUNCHER `activity-alias` (켜진 것이 정확히 하나일 때) | `android.launcherAliases` |
+| `NS*UsageDescription` keys in `Info.plist` (non-empty) | `ios.infoPlist.requiredKeys` |
+| Build setting `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` | `ios.alternateIcons.names` |
+| Permissions in the source manifest | `android.permissions.required` |
+| Permissions marked `tools:node="remove"` in the source manifest | `android.permissions.forbidden` (`blockedInSource: true`) |
+| Permissions only in the merged manifest (after the Gradle step) | `android.permissions.requiredMerged` |
+| LAUNCHER `activity-alias` elements (when exactly one is enabled) | `android.launcherAliases` |
+| Intent actions the main activity keeps, other than `MAIN` (when it uses aliases) | `android.launcherAliases.mainActivityActions` |
 
-모든 `reason`은 `TODO: …`로 채워지니 직접 고치세요. 실패했을 때 다음 사람이 보는 설명입니다. 무엇을 **금지**할지(위치·연락처 등)는 산출물이 말해 주지 않으므로 `forbidden`에 직접 더해야 합니다.
+Every `reason` is set to `TODO: …` — replace them; they are what the next person reads when a check fails. What must **never** appear (location, contacts, background modes, …) cannot be inferred from the output, so add it to `forbidden` yourself.
 
-| 옵션 | 설명 |
+| Option | Description |
 | --- | --- |
-| `--force` | 이미 있는 설정 파일을 덮어씁니다. 없으면 기존 파일을 지키고 종료 코드 `2`로 끝납니다. |
-| `--stdout` | 파일을 만들지 않고 JSON을 출력합니다. 기존 설정과 비교할 때 씁니다. |
-| `--cwd <path>` | 프로젝트 루트. |
+| `--force` | Overwrite an existing config file. Without it, the existing file is kept and the exit code is `2`. |
+| `--stdout` | Print the JSON instead of writing a file — useful to compare with your current config. |
+| `--cwd <path>` | Project root. |
 
 ## `check`
 
-등록된 검사를 실행합니다. 검사 id를 주면 그 검사만 실행합니다.
+Runs the registered checks. Pass ids to run only those.
 
 ```bash
-npx expo-release-guard check                          # 기본 검사 전부
-npx expo-release-guard check ios-plist                # 하나만
+npx expo-release-guard check                          # all default checks
+npx expo-release-guard check ios-plist                # one check
 npx expo-release-guard check ios-alternate-icons android-launcher-aliases
-npx expo-release-guard check android-merged-manifest  # id 지정 시에만 도는 검사
+npx expo-release-guard check android-merged-manifest  # runs only when named
 ```
 
-별도 빌드 단계가 필요한 검사(`android-merged-manifest` — Gradle 병합)는 기본 실행에 포함되지 않습니다. `list`에서 "(id 지정 시에만)"으로 표시됩니다.
+Checks that need an extra build step (`android-merged-manifest` — the Gradle merge) are not part of the default run; `list` marks them "(only when named)". A check without config is **skipped**, not failed.
 
-| 옵션 | 설명 |
+| Option | Description |
 | --- | --- |
-| `-c, --config <path>` | 설정 파일 경로. 생략하면 `release-guard.config.json` → `.js` → `.mjs` 순으로 찾습니다. |
-| `--cwd <path>` | 검사할 프로젝트 루트. 생략하면 현재 디렉터리입니다. 모노레포에서 앱 하나를 지정할 때 씁니다. |
-| `--json` | 결과를 JSON으로 출력합니다. |
-| `-h, --help` | 도움말을 출력합니다. |
+| `-c, --config <path>` | Config file. Without it, `release-guard.config.json` → `.js` → `.mjs` are tried in order. |
+| `--cwd <path>` | Project root to check. Defaults to the current directory; use it to target one app in a monorepo. |
+| `--json` | Print results as JSON. |
+| `-h, --help` | Show help. |
 
 ## `list`
 
-등록된 검사의 id와 설명을 탭으로 구분해 출력합니다.
+Prints each registered check's id and title, separated by a tab.
 
-## 종료 코드
+## Exit codes
 
-| 코드 | 의미 |
+| Code | Meaning |
 | --- | --- |
-| `0` | 모든 검사가 통과했거나 건너뛰었습니다. |
-| `1` | 하나 이상의 검사가 실패했습니다. 릴리스를 막아야 합니다. |
-| `2` | 사용법 오류 또는 설정 오류입니다 (알 수 없는 명령·옵션·검사 id, 설정 파일 없음, 설정 모양이 틀림). |
+| `0` | Every check passed or was skipped. |
+| `1` | At least one check failed. Block the release. |
+| `2` | Usage or config error (unknown command, option or check id; no config file; malformed config). |
 
-검사 실패(1)와 설정 오류(2)를 구분하므로, CI에서 "앱이 잘못됐다"와 "도구를 잘못 썼다"를 나눠 볼 수 있습니다.
+Separating check failures (`1`) from config errors (`2`) lets CI tell "the app is broken" from "the tool is misconfigured".
 
-## JSON 출력
+## JSON output
 
 ```json
 {
@@ -75,12 +76,12 @@ npx expo-release-guard check android-merged-manifest  # id 지정 시에만 도�
   "checks": [
     {
       "id": "ios-plist",
-      "title": "prebuild 산출물 Info.plist의 필수 키",
+      "title": "Required Info.plist keys in the prebuild output",
       "result": {
         "status": "fail",
-        "summary": "필수 키 3개 중 1개 누락",
+        "summary": "1 of 3 Info.plist rule(s) violated",
         "problems": [
-          { "message": "NSRemindersUsageDescription가 없거나 비었습니다.", "hint": "…" }
+          { "message": "NSRemindersUsageDescription is missing or empty.", "hint": "…" }
         ]
       }
     }
@@ -88,4 +89,4 @@ npx expo-release-guard check android-merged-manifest  # id 지정 시에만 도�
 }
 ```
 
-`result.status`는 `pass` · `fail` · `skip` 중 하나이고, 상태마다 필드가 다릅니다 ([API 문서의 `CheckResult`](api.md#checkresult)).
+`result.status` is `pass`, `fail` or `skip`, and each status has its own fields ([`CheckResult` in the API docs](api.md#checkresult)).

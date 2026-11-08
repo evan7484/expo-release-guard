@@ -1,14 +1,16 @@
-# 설정 레퍼런스
+# Configuration
 
-## 파일 위치
+## File lookup
 
-프로젝트 루트(`--cwd`)에서 아래 순서로 첫 번째 파일을 씁니다. `--config`로 직접 지정할 수도 있습니다.
+The first of these files in the project root (`--cwd`) is used. You can also pass one with `--config`.
 
 1. `release-guard.config.json`
 2. `release-guard.config.js` (ESM, `export default`)
 3. `release-guard.config.mjs`
 
-JS 설정에서는 `defineConfig`로 타입 추론을 받을 수 있습니다.
+The fastest way to start is `npx expo-release-guard init`, which writes a draft from your current prebuild output ([CLI docs](cli.md#init)).
+
+In JS configs, `defineConfig` gives you type inference:
 
 ```js
 // release-guard.config.mjs
@@ -17,21 +19,23 @@ import { defineConfig } from "expo-release-guard";
 export default defineConfig({
   ios: {
     infoPlist: {
-      requiredKeys: [{ key: "NSCameraUsageDescription", reason: "인증 사진 촬영" }],
+      requiredKeys: [{ key: "NSCameraUsageDescription", reason: "Profile photo capture." }],
     },
   },
 });
 ```
 
-## 스키마
+## Schema
 
 ```ts
 interface Config {
   ios?: {
     infoPlist?: {
-      /** cwd 기준 Info.plist 경로. 생략하면 ios/<앱 이름>/Info.plist를 찾는다. */
+      /** Info.plist path relative to cwd. Omit to find ios/<app name>/Info.plist. */
       path?: string;
-      requiredKeys: { key: string; reason: string }[];
+      requiredKeys?: { key: string; reason: string }[];
+      /** Without `values`, the key must not exist. With `values`, the key must not contain any of them. */
+      forbidden?: { key: string; values?: string[]; reason: string }[];
     };
     alternateIcons?: {
       names: string[];
@@ -52,25 +56,28 @@ interface Config {
       enabledByDefault: string;
       mainActivity?: string;
       manifestPath?: string;
+      mainActivityActions?: string[];
     };
   };
 }
 ```
 
-Android 권한 규칙의 의미는 [android-manifest 문서](checks/android-manifest.md), 아이콘 설정은 [app-icons 문서](checks/app-icons.md)에 있습니다.
+What each section means: [ios-plist](checks/ios-plist.md), [android-manifest](checks/android-manifest.md), [app-icons](checks/app-icons.md).
 
-처음이라면 직접 쓰기보다 `npx expo-release-guard init`으로 지금 산출물에서 초안을 만드는 편이 빠릅니다([CLI 문서](cli.md#init)).
+## Validation
 
-설정은 읽을 때 한 번 검증합니다. 모양이 틀리면 검사를 돌리지 않고 어느 위치가 틀렸는지 알려 준 뒤 종료 코드 `2`로 끝납니다.
+The config is validated once when it is read. If it is malformed, no check runs; the error names the exact location and the exit code is `2`.
 
-| 규칙 | 오류 예 |
+| Rule | Example error |
 | --- | --- |
-| `requiredKeys`는 배열 | ``ios.infoPlist.requiredKeys`는 배열이어야 합니다.`` |
-| 각 항목은 `key`와 `reason`이 모두 문자열 | ``ios.infoPlist.requiredKeys[0]`는 { key: string, reason: string } 이어야 합니다.`` |
-| `key`는 비어 있지 않음 | ``ios.infoPlist.requiredKeys[0].key`가 비었습니다.`` |
-| `key`는 중복 불가 | ``ios.infoPlist.requiredKeys`에 A가 중복됩니다.`` |
-| 권한 이름은 목록 안에서 중복 불가 (짧은 이름·전체 이름 동일 취급) | ``android.permissions.forbidden`에 android.permission.CAMERA가 중복됩니다.`` |
-| 같은 권한을 required와 forbidden에 함께 둘 수 없음 | ``android.permissions`: CAMERA가 required와 forbidden에 함께 있습니다.`` |
-| `blockedInSource`는 forbidden에서만 | ``android.permissions.required[0]`.blockedInSource는 forbidden에서만 쓸 수 있습니다.`` |
+| `requiredKeys` is an array | ``ios.infoPlist.requiredKeys` must be an array.`` |
+| Each item has string `key` and `reason` | ``ios.infoPlist.requiredKeys[0]` must be { key: string, reason: string }.`` |
+| `key` is not empty | ``ios.infoPlist.requiredKeys[0].key` is empty.`` |
+| No duplicate keys | ``ios.infoPlist.requiredKeys` lists A more than once.`` |
+| A key cannot be both required and forbidden (without `values`) | ``ios.infoPlist`: A is both required and forbidden.`` |
+| No duplicate permissions in a list (`CAMERA` and `android.permission.CAMERA` are the same) | ``android.permissions.forbidden` lists android.permission.CAMERA more than once.`` |
+| A permission cannot be both required and forbidden | ``android.permissions`: CAMERA is both required and forbidden.`` |
+| `blockedInSource` only in `forbidden` | ``android.permissions.required[0]`.blockedInSource is only allowed in forbidden.`` |
+| `enabledByDefault` is one of `aliases` | ``android.launcherAliases.enabledByDefault` must be one of aliases.`` |
 
-`reason`을 필수로 둔 이유: 필요 없어 보이는 키일수록 지워지기 쉽습니다. 실패 메시지에 이유가 함께 나와야 다음 사람이 같은 실수를 반복하지 않습니다.
+Why `reason` is mandatory: the keys that look unnecessary are exactly the ones that get deleted. The failure message has to carry the reason so the next person does not repeat the mistake.

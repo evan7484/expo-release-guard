@@ -11,7 +11,7 @@ export function formatText(reports: readonly CheckReport[]): string {
         lines.push(`${ICON.pass} ${id}: ${result.summary}`);
         break;
       case "skip":
-        lines.push(`${ICON.skip} ${id}: 건너뜀 — ${result.reason}`);
+        lines.push(`${ICON.skip} ${id}: skipped — ${result.reason}`);
         break;
       case "fail":
         lines.push(`${ICON.fail} ${id}: ${result.summary}`);
@@ -23,7 +23,7 @@ export function formatText(reports: readonly CheckReport[]): string {
     }
   }
   const failed = reports.filter((r) => r.result.status === "fail").length;
-  lines.push("", failed === 0 ? "모든 검사를 통과했습니다." : `${String(failed)}개 검사가 실패했습니다.`);
+  lines.push("", failed === 0 ? "All checks passed." : `${String(failed)} check(s) failed.`);
   return lines.join("\n");
 }
 

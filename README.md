@@ -8,15 +8,15 @@ A CLI that checks your Expo app's **prebuild output** — the generated `Info.pl
 
 ```console
 $ npx expo-release-guard check
-✖ ios-plist: 필수 키 3개 중 1개 누락
-    - NSRemindersUsageDescription가 없거나 비었습니다.
+✖ ios-plist: 1 of 3 Info.plist rule(s) violated
+    - NSRemindersUsageDescription is missing or empty.
       expo-calendar reads this key on launch. Without it the app dies on the splash screen.
-✔ android-manifest: android/app/src/main/AndroidManifest.xml: 권한 규칙 15개 모두 충족
+✔ android-manifest: android/app/src/main/AndroidManifest.xml: all 15 permission rule(s) satisfied
 
-1개 검사가 실패했습니다.
+1 check(s) failed.
 ```
 
-> The tool's own messages are currently in Korean (English output is planned). The `reason` lines are whatever you write in your config.
+The indented line under each problem is the `reason` you wrote in your config.
 
 ## Why
 
@@ -52,7 +52,7 @@ npx expo-release-guard init     # writes release-guard.config.json from the curr
 npx expo-release-guard check
 ```
 
-`init` freezes **today's output as the baseline**: usage-description keys, alternate icons, Android permissions (including those marked `tools:node="remove"`), and launcher aliases. Add anything that must *never* appear (location, contacts, …) to `forbidden` yourself — the output cannot tell you that.
+`init` freezes **today's output as the baseline**: usage-description keys, alternate icons, Android permissions (including those marked `tools:node="remove"`), launcher aliases and the main activity's remaining entry points. Add anything that must *never* appear (location, contacts, background modes, …) to `forbidden` yourself — the output cannot tell you that.
 
 A hand-written config looks like this:
 
@@ -62,6 +62,9 @@ A hand-written config looks like this:
     "infoPlist": {
       "requiredKeys": [
         { "key": "NSRemindersUsageDescription", "reason": "expo-calendar reads it on launch. Missing = crash on splash." }
+      ],
+      "forbidden": [
+        { "key": "UIBackgroundModes", "values": ["processing"], "reason": "Pulled in by an Android-only task; App Review asks why." }
       ]
     }
   },
@@ -82,11 +85,11 @@ A hand-written config looks like this:
 
 | id | What it checks | Docs |
 | --- | --- | --- |
-| `ios-plist` | Required `Info.plist` keys are present as non-empty strings in the generated project | [ios-plist](docs/checks/ios-plist.md) |
+| `ios-plist` | Required `Info.plist` keys are non-empty strings, and forbidden keys or values (e.g. a background mode) are absent | [ios-plist](docs/checks/ios-plist.md) |
 | `ios-alternate-icons` | Alternate app icons are registered in **both** the build setting and the asset catalog | [app-icons](docs/checks/app-icons.md) |
 | `android-manifest` | Required / forbidden permissions in the generated source manifest, and that blocked permissions keep their `tools:node="remove"` directive | [android-manifest](docs/checks/android-manifest.md) |
 | `android-merged-manifest` | Required / forbidden permissions in the **Gradle-merged** manifest (what actually ships). Run by id after `processReleaseMainManifest` | [android-manifest](docs/checks/android-manifest.md) |
-| `android-launcher-aliases` | One alias per icon, each a LAUNCHER, exactly one enabled by default, main activity enabled and not a launcher | [app-icons](docs/checks/app-icons.md) |
+| `android-launcher-aliases` | One alias per icon, each a LAUNCHER, exactly one enabled by default; the main activity stays enabled, is not a launcher, and keeps its deep-link actions | [app-icons](docs/checks/app-icons.md) |
 
 Two Android traps these catch that input checks miss:
 
@@ -105,7 +108,7 @@ Two Android traps these catch that input checks miss:
 - uses: evan7484/expo-release-guard@v0
   with:
     prebuild: all          # none | ios | android | all
-    version: 0.2.0         # pin for reproducible CI
+    version: 0.3.0         # pin for reproducible CI
 ```
 
 Inputs: `checks` (space-separated ids), `config`, `working-directory`, `prebuild`, `version`.
@@ -124,8 +127,6 @@ Exit codes: `0` passed · `1` a check failed · `2` usage or config error — so
 Tip: if adding a dependency or script changes your native fingerprint (and breaks OTA updates), skip `npm i -D` and call `npx --yes expo-release-guard@<version>` in CI instead.
 
 ## Docs
-
-The reference docs are currently in Korean.
 
 - [CLI reference](docs/cli.md) — `init`, `check`, `list`, exit codes, JSON output
 - [Configuration](docs/configuration.md) — file lookup and schema

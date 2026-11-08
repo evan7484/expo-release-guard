@@ -11,7 +11,9 @@ const MANIFEST = `<manifest xmlns:android="http://schemas.android.com/apk/res/an
   <uses-permission android:name="android.permission.INTERNET"/>
   <uses-permission android:name="android.permission.CAMERA" tools:node="remove"/>
   <application>
-    <activity android:name=".MainActivity"/>
+    <activity android:name=".MainActivity">
+      <intent-filter><action android:name="android.intent.action.VIEW"/></intent-filter>
+    </activity>
     <activity-alias android:name=".MainActivityDefault" android:enabled="true">
       <intent-filter><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
     </activity-alias>
@@ -61,6 +63,8 @@ describe("buildInitialConfig", () => {
     expect(android?.launcherAliases).toEqual({
       aliases: ["MainActivityDefault", "MainActivitySunny"],
       enabledByDefault: "MainActivityDefault",
+      // 런처를 별칭으로 옮긴 앱의 메인 액티비티 진입점(딥링크)도 기준선으로
+      mainActivityActions: ["android.intent.action.VIEW"],
     });
   });
 
@@ -105,8 +109,8 @@ describe("cli init", () => {
     const cwd = prebuiltProject();
     const { code, stdout } = await run(["init"], cwd);
     expect(code).toBe(EXIT.ok);
-    expect(stdout).toContain("release-guard.config.json를 만들었습니다");
-    expect(stdout).toContain("iOS: 권한 문구 2개");
+    expect(stdout).toContain("Wrote release-guard.config.json");
+    expect(stdout).toContain("iOS: 2 usage description(s)");
     const written = JSON.parse(readFileSync(path.join(cwd, "release-guard.config.json"), "utf8")) as unknown;
     expect(parseConfig(written).ok).toBe(true);
     // 만든 설정으로 바로 check가 통과한다

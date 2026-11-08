@@ -17,26 +17,26 @@ export interface Io {
   readonly cwd: string;
 }
 
-const HELP = `expo-release-guard — Expo prebuild 산출물을 릴리스 전에 검사합니다
+const HELP = `expo-release-guard — check Expo prebuild output before you release
 
-사용법
+Usage
   expo-release-guard init [--force] [--stdout]
-  expo-release-guard check [검사 id...] [옵션]
+  expo-release-guard check [check id...] [options]
   expo-release-guard list
 
 init
-  지금 prebuild 산출물을 읽어 release-guard.config.json 초안을 만듭니다.
-      --force          이미 있는 설정 파일을 덮어씀
-      --stdout         파일 대신 표준 출력으로
+  Write a release-guard.config.json draft from the current prebuild output.
+      --force          overwrite an existing config file
+      --stdout         print instead of writing a file
 
-옵션
-  -c, --config <path>  설정 파일 경로 (기본: release-guard.config.{json,js,mjs})
-      --cwd <path>     검사할 프로젝트 루트 (기본: 현재 디렉터리)
-      --json           결과를 JSON으로 출력
-  -h, --help           도움말
+Options
+  -c, --config <path>  config file (default: release-guard.config.{json,js,mjs})
+      --cwd <path>     project root to check (default: current directory)
+      --json           print results as JSON
+  -h, --help           show this help
 
-종료 코드
-  0 통과 · 1 검사 실패 · 2 사용법·설정 오류`;
+Exit codes
+  0 passed · 1 a check failed · 2 usage or config error`;
 
 /** 테스트에서 프로세스를 띄우지 않고 부를 수 있게 입출력을 주입받는다. */
 export async function main(argv: readonly string[], io: Io): Promise<number> {
@@ -81,16 +81,16 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
       }
       const existing = CONFIG_FILENAMES.map((f) => path.join(cwd, f)).find((f) => existsSync(f));
       if (existing !== undefined && !values.force) {
-        io.stderr(`${path.relative(cwd, existing)}가 이미 있습니다. 덮어쓰려면 --force, 비교만 하려면 --stdout을 쓰세요.`);
+        io.stderr(`${path.relative(cwd, existing)} already exists. Use --force to overwrite, or --stdout to compare.`);
         return EXIT.usage;
       }
       const target = path.join(cwd, CONFIG_FILENAMES[0]);
       writeFileSync(target, json);
-      io.stdout([`✔ ${path.relative(cwd, target)}를 만들었습니다.`, ...draft.value.notes.map((n) => `  - ${n}`)].join("\n"));
+      io.stdout([`✔ Wrote ${path.relative(cwd, target)}`, ...draft.value.notes.map((n) => `  - ${n}`)].join("\n"));
       return EXIT.ok;
     }
     case "list":
-      io.stdout(checks.map((c) => `${c.id}\t${c.title}${c.runsByDefault === false ? " (id 지정 시에만)" : ""}`).join("\n"));
+      io.stdout(checks.map((c) => `${c.id}\t${c.title}${c.runsByDefault === false ? " (only when named)" : ""}`).join("\n"));
       return EXIT.ok;
     case "check": {
       const cwd = path.resolve(io.cwd, values.cwd ?? ".");
@@ -108,7 +108,7 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
       return hasFailure(run.value) ? EXIT.checkFailed : EXIT.ok;
     }
     default:
-      io.stderr(`알 수 없는 명령: ${command}\n\n${HELP}`);
+      io.stderr(`Unknown command: ${command}\n\n${HELP}`);
       return EXIT.usage;
   }
 }

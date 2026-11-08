@@ -1,55 +1,57 @@
-# 기여 가이드
+# Contributing
 
-## 개발
+## Development
 
 ```bash
 npm ci
-npm test          # Vitest
-npm run lint      # ESLint (typescript-eslint strictTypeChecked)
-npm run typecheck # tsc --noEmit
-npm run build     # tsup → dist/
+npm test               # Vitest
+npm run lint           # ESLint (typescript-eslint strictTypeChecked)
+npm run typecheck      # tsc --noEmit
+npm run build          # tsup → dist/
 npm run check:package  # publint + are-the-types-wrong
 ```
 
-PR마다 CI가 Node 22·24에서 lint·typecheck·test를 돌리고, 배포될 tarball을 실제로 설치해 CLI를 실행해 봅니다.
+On every PR, CI runs lint, typecheck and tests on Node 22 and 24, installs the packed tarball and runs the CLI from it, and runs the composite GitHub Action.
 
-## 디렉터리 구조
+## Layout
 
 ```
 src/
-  cli.ts            인자 해석·종료 코드. 입출력을 주입받아 프로세스 없이 테스트한다
-  init.ts           지금 산출물에서 설정 초안을 만든다 (init 명령)
-  index.ts          공개 API — 여기서 export하지 않은 것은 내부 구현
-  config.ts         설정 파일 탐색·읽기·검증 (외부 입력은 여기서만 unknown → Config로 좁힌다)
-  run.ts            검사 선택·실행, 검사 하나의 예외가 나머지를 막지 않게
-  report.ts         텍스트·JSON 출력
-  plist.ts          @expo/plist CJS interop을 한 곳에 가둔다
-  types.ts          CheckResult·Result 등 공용 타입
+  cli.ts            argument parsing and exit codes; I/O is injected so it is tested without a process
+  init.ts           builds a config draft from the current output (the init command)
+  index.ts          public API — anything not exported here is internal
+  config.ts         config lookup, reading and validation (external input is narrowed from unknown only here)
+  run.ts            check selection and execution; one check throwing never blocks the others
+  report.ts         text and JSON output
+  plist.ts          keeps the @expo/plist CJS interop in one place
+  types.ts          shared types such as CheckResult and Result
   checks/
-    index.ts        검사 등록부
-    types.ts        Check 인터페이스
-    ios-plist.ts    검사 하나 = 파일 하나
-    android-manifest.ts  같은 규칙을 소스·병합 두 단계에 적용하는 검사 둘
-    app-icons.ts    iOS 대체 아이콘·Android 런처 별칭 등록 검사 둘
+    index.ts        check registry
+    types.ts        the Check interface
+    ios-plist.ts    one check per file
+    android-manifest.ts  the same rules applied to the source and merged manifests (two checks)
+    app-icons.ts    iOS alternate icons and Android launcher aliases (two checks)
 test/
-  fixtures/         CLI 스모크 테스트용 샘플 Expo 프로젝트
-  helpers.ts        임시 프로젝트를 만드는 도우미
-docs/               사용자 문서 (README에서 링크)
+  fixtures/         a sample Expo project for CLI smoke tests
+  helpers.ts        builds throwaway projects
+docs/               user docs (linked from the README)
+action.yml          the composite GitHub Action
 ```
 
-## 검사 추가하기
+## Adding a check
 
-1. `src/checks/<id>.ts`에 `Check`를 구현합니다. 설정이 없으면 `fail`이 아니라 `skip`을 돌려주세요.
-   별도 빌드 단계가 있어야 하는 검사는 `runsByDefault: false`로 두어 id를 지정했을 때만 돌게 합니다.
-2. 순수 로직은 `run<Id>(cwd, options)`처럼 따로 export해 테스트하기 쉽게 합니다.
-3. `src/checks/index.ts`의 `checks` 배열에 추가합니다.
-4. 설정이 필요하면 `src/config.ts`의 `Config` 타입과 `parseConfig`에 검증을 추가합니다.
-5. `test/<id>.test.ts`에 통과·실패·건너뜀·잘못된 입력 경우를 씁니다.
-6. `docs/checks/<id>.md`를 쓰고 README(영어·한국어) 검사 목록에 한 줄 추가합니다.
-7. 산출물에서 기준선을 뽑을 수 있는 검사라면 `src/init.ts`에도 초안 생성을 더합니다.
+1. Implement `Check` in `src/checks/<id>.ts`. Without config, return `skip`, not `fail`.
+   A check that needs an extra build step should set `runsByDefault: false` so it runs only when named.
+2. Export the pure logic separately, e.g. `run<Id>(cwd, options)`, so it is easy to test.
+3. Add it to the `checks` array in `src/checks/index.ts`.
+4. If it needs config, extend the `Config` type and `parseConfig` in `src/config.ts`.
+5. Write `test/<id>.test.ts` covering pass, fail, skip and malformed input — ideally reproducing a real incident.
+6. Write `docs/checks/<id>.md` and add a line to the check tables in both READMEs.
+7. If a baseline can be read from the output, teach `src/init.ts` to draft it.
 
-## 원칙
+## Principles
 
-- 실패 메시지는 "무엇이 틀렸는지"와 "무엇을 하면 되는지"를 함께 말합니다.
-- 후보가 여럿이면 추측하지 말고 설정을 요구합니다.
-- `any`를 쓰지 않습니다. 외부 입력은 `unknown`으로 받아 좁힙니다.
+- A failure message says both *what is wrong* and *what to do*.
+- With several candidates, never guess — ask for configuration.
+- No `any`. External input comes in as `unknown` and is narrowed.
+- User-facing text is English. Code comments may be Korean.

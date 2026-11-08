@@ -14,7 +14,7 @@ describe("ios-plist", () => {
     });
     expect(runIosPlist(cwd, { requiredKeys: required })).toEqual({
       status: "pass",
-      summary: "필수 키 2개 모두 존재",
+      summary: "all 2 Info.plist rule(s) satisfied",
     });
   });
 
@@ -23,8 +23,8 @@ describe("ios-plist", () => {
     const result = runIosPlist(cwd, { requiredKeys: required });
     expect(result).toEqual({
       status: "fail",
-      summary: "필수 키 2개 중 1개 누락",
-      problems: [{ message: "NSRemindersUsageDescription가 없거나 비었습니다.", hint: required[1].reason }],
+      summary: "1 of 2 Info.plist rule(s) violated",
+      problems: [{ message: "NSRemindersUsageDescription is missing or empty.", hint: required[1].reason }],
     });
   });
 
@@ -48,7 +48,7 @@ describe("ios-plist", () => {
 
   it("지정한 path가 없으면 실패한다", () => {
     const result = runIosPlist(makeProject({}), { path: "ios/Nope/Info.plist", requiredKeys: required });
-    expect(result).toMatchObject({ status: "fail", summary: "ios/Nope/Info.plist가 없습니다." });
+    expect(result).toMatchObject({ status: "fail", summary: "ios/Nope/Info.plist does not exist." });
   });
 
   it("plist가 깨져 있으면 해석 실패로 보고한다", () => {
@@ -74,5 +74,36 @@ describe("findInfoPlist", () => {
     const found = findInfoPlist(cwd);
     expect(found).toMatchObject({ ok: false });
     expect(found.ok ? "" : found.error).toContain("ios.infoPlist.path");
+  });
+});
+
+describe("ios-plist — forbidden", () => {
+  const plistWithModes = (modes: string[]) =>
+    plistXml({ NSCalendarsUsageDescription: "a" }).replace(
+      "</dict>",
+      `  <key>UIBackgroundModes</key>\n  <array>${modes.map((m) => `<string>${m}</string>`).join("")}</array>\n</dict>`,
+    );
+
+  it("금지 값을 담은 배열 키를 잡는다 — 다른 플랫폼 플러그인이 끌어온 백그라운드 모드", () => {
+    const cwd = makeProject({ "ios/App/Info.plist": plistWithModes(["remote-notification", "processing"]) });
+    const result = runIosPlist(cwd, {
+      requiredKeys: [],
+      forbidden: [{ key: "UIBackgroundModes", values: ["processing", "location"], reason: "Android-only task" }],
+    });
+    expect(result).toEqual({
+      status: "fail",
+      summary: "1 of 1 Info.plist rule(s) violated",
+      problems: [{ message: "UIBackgroundModes contains processing.", hint: "Android-only task" }],
+    });
+  });
+
+  it("금지 값이 없으면 통과, values 없이 적은 키는 있기만 해도 실패", () => {
+    const cwd = makeProject({ "ios/App/Info.plist": plistWithModes(["remote-notification"]) });
+    expect(
+      runIosPlist(cwd, { requiredKeys: [], forbidden: [{ key: "UIBackgroundModes", values: ["processing"], reason: "r" }] }).status,
+    ).toBe("pass");
+    expect(
+      JSON.stringify(runIosPlist(cwd, { requiredKeys: [], forbidden: [{ key: "UIBackgroundModes", reason: "r" }] })),
+    ).toContain("UIBackgroundModes must not be present.");
   });
 });

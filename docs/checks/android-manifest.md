@@ -1,18 +1,18 @@
 # `android-manifest` · `android-merged-manifest`
 
-Android 매니페스트에 **있어야 할 권한은 있고, 있으면 안 되는 권한은 없는지** 검사합니다. 같은 규칙을 두 단계의 산출물에 적용합니다.
+Checks that the Android manifest **has the permissions it must have and none it must not**. The same rules are applied to two stages of output.
 
-| id | 보는 파일 | 기본 실행 | 잡는 사고 |
+| id | File | Default run | Catches |
 | --- | --- | --- | --- |
-| `android-manifest` | prebuild 산출물 `android/app/src/main/AndroidManifest.xml` | 예 | `blockedPermissions` 설정이 빠져 제거 지시자가 사라짐, 금지 권한 직접 선언 |
-| `android-merged-manifest` | Gradle 병합본 (`android/app/build/intermediates/merged_manifest*/release/…`) | 아니오 (id 지정) | 라이브러리 매니페스트에서 금지 권한이 되살아남, 라이브러리가 넣어야 할 권한이 빠짐 |
+| `android-manifest` | Prebuild output `android/app/src/main/AndroidManifest.xml` | yes | `blockedPermissions` dropped from `app.json` (removal directive gone), forbidden permission declared directly |
+| `android-merged-manifest` | Gradle merge result (`android/app/build/intermediates/merged_manifest*/release/…`) | no (run by id) | Forbidden permission revived from a library manifest, a library-provided permission missing |
 
-## 왜 두 단계인가
+## Why two stages
 
-- **소스에서만 보이는 것.** `app.json`의 `android.blockedPermissions`는 소스 매니페스트에 `tools:node="remove"`가 붙은 항목을 만듭니다. 이 설정이 지워지면 항목이 소스에서 **통째로 사라지고**, 병합 때 라이브러리 매니페스트에서 권한이 조용히 되살아납니다. 그래서 소스 단계에서는 "없으면 안전"이 아니라 **"제거 지시자가 붙어 있는가"**를 봅니다 (`blockedInSource: true`).
-- **병합본에서만 보이는 것.** `expo-notifications`의 `POST_NOTIFICATIONS`처럼 라이브러리가 넣는 권한은 소스에 없고 병합본에만 있습니다. 최종적으로 앱에 실리는 것도 병합본입니다.
+- **Only visible in the source.** `app.json`'s `android.blockedPermissions` writes entries with `tools:node="remove"` into the source manifest. If that setting disappears, the entries **vanish entirely** from the source, and the permission silently comes back from a library manifest during the merge. So the source stage does not treat "absent" as safe; it checks that **the removal directive is there** (`blockedInSource: true`).
+- **Only visible after the merge.** Permissions added by libraries — like `POST_NOTIFICATIONS` from `expo-notifications` — are not in the source, only in the merged manifest. The merged manifest is also what actually ships.
 
-병합 검사는 Gradle 단계가 있어야 하므로 기본 실행에서 빠집니다. id로 실행하세요.
+The merged check needs the Gradle step, so it is not part of the default run. Run it by id:
 
 ```bash
 npx expo prebuild --platform android --no-install
@@ -22,41 +22,41 @@ npx expo-release-guard check android-manifest
 npx expo-release-guard check android-merged-manifest
 ```
 
-## 설정
+## Config
 
 ```json
 {
   "android": {
     "permissions": {
-      "required": [{ "name": "INTERNET", "reason": "서버 통신" }],
-      "requiredMerged": [{ "name": "POST_NOTIFICATIONS", "reason": "expo-notifications가 넣는다. 없으면 Android 13+에서 푸시 권한 요청 불가" }],
+      "required": [{ "name": "INTERNET", "reason": "Talks to our API." }],
+      "requiredMerged": [{ "name": "POST_NOTIFICATIONS", "reason": "Added by expo-notifications. Missing = no push prompt on Android 13+." }],
       "forbidden": [
-        { "name": "CAMERA", "reason": "사진은 앨범 선택만 쓴다", "blockedInSource": true },
-        { "name": "READ_CONTACTS", "reason": "연락처를 읽는 기능이 없다" }
+        { "name": "CAMERA", "reason": "We only pick from the photo library.", "blockedInSource": true },
+        { "name": "READ_CONTACTS", "reason": "We never read contacts." }
       ]
     }
   }
 }
 ```
 
-| 필드 | 설명 |
+| Field | Description |
 | --- | --- |
-| `required` | 소스·병합 모두에 있어야 하는 권한 |
-| `requiredMerged` | 병합본에만 있으면 되는 권한 (라이브러리가 넣는 것) |
-| `forbidden` | 최종 앱에 남으면 안 되는 권한. `blockedInSource: true`면 소스에서 제거 지시자를 요구 |
-| `sourcePath` | 소스 매니페스트 경로 (기본 `android/app/src/main/AndroidManifest.xml`) |
-| `mergedPath` | 병합 매니페스트 경로. 생략하면 자동 탐색 |
+| `required` | Must be present in both the source and the merged manifest |
+| `requiredMerged` | Must be present in the merged manifest only (library-provided) |
+| `forbidden` | Must not end up in the app. With `blockedInSource: true` the source must carry a removal directive |
+| `sourcePath` | Source manifest path (default `android/app/src/main/AndroidManifest.xml`) |
+| `mergedPath` | Merged manifest path. Found automatically when omitted |
 
-권한 이름은 `CAMERA`처럼 짧게 쓰면 `android.permission.CAMERA`로 봅니다. `com.google.android.gms.permission.AD_ID`처럼 점이 들어간 이름은 그대로 봅니다. 짧은 이름과 전체 이름은 같은 권한으로 취급하므로 중복으로 적으면 설정 오류입니다.
+A short name like `CAMERA` means `android.permission.CAMERA`. Names containing a dot, like `com.google.android.gms.permission.AD_ID`, are used as-is. Short and full names are the same permission, so listing both is a config error.
 
-## 판정
+## Rules
 
-| 모드 | 규칙 | 실패 조건 |
+| Stage | Rule | Fails when |
 | --- | --- | --- |
-| 소스 | `forbidden` + `blockedInSource` | 항목이 없음 / `tools:node="remove"` 없이 선언 |
-| 소스 | `forbidden` | 제거 지시자 없이 선언 |
-| 병합 | `forbidden` | 병합본에 남아 있음 |
-| 둘 다 | `required` (병합은 `requiredMerged` 포함) | 없음 / 제거 지시자가 붙음 |
+| source | `forbidden` + `blockedInSource` | the entry is missing / declared without `tools:node="remove"` |
+| source | `forbidden` | declared without a removal directive |
+| merged | `forbidden` | present in the merged manifest |
+| both | `required` (merged also `requiredMerged`) | missing / carries a removal directive |
 
-- `<uses-permission-sdk-23>`은 다른 태그로 보고 섞지 않습니다.
-- 병합본 후보가 여럿이면(flavor가 여럿이거나 AGP가 경로를 바꾼 경우) 하나를 골라 통과시키지 않고 `mergedPath`를 요구합니다.
+- `<uses-permission-sdk-23>` is a different tag and is not mixed in.
+- With several merged-manifest candidates (multiple flavors, or AGP moved the path), it fails and asks for `mergedPath` instead of picking one.
